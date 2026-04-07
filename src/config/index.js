@@ -35,15 +35,22 @@ module.exports = {
   produtos: {
     triboDoInvestidor: {
       nome: 'Tribo do Investidor',
-      descricao: 'Comunidade completa de investimentos',
-      preco: 'R$ 97,00/mês (ou 12x R$ 97,00)',
-      link: process.env.LINK_TRIBO_DO_INVESTIDOR || '',
+      descricao: 'Comunidade ativa de investimentos liderada pelo Lucas',
+      preco: '12x R$ 97,00',
+      precoAnual: 'R$ 997,00/ano',
+      ancoragem: 'R$ 3,23 por dia — menos que um café',
+      garantia: '7 dias com devolução integral',
+      // Link real de compra — override via .env
+      link: process.env.LINK_TRIBO_DO_INVESTIDOR || 'https://triboinvest.com.br/tribo-do-investidor/',
     },
     organizacaoFinanceira: {
       nome: 'Organização Financeira e Negociação de Dívidas',
-      descricao: 'Método para organizar as finanças e sair das dívidas de vez',
+      descricao: 'Método completo para organizar finanças e sair das dívidas',
       preco: 'R$ 97,00 (pagamento único)',
-      link: process.env.LINK_ORG_FINANCEIRA || '',
+      ancoragem: 'menos do que um boleto de cartão em atraso',
+      garantia: '7 dias com devolução integral',
+      // Link real de compra — override via .env
+      link: process.env.LINK_ORG_FINANCEIRA || 'https://chk.eduzz.com/8WPNOBJN0P',
     },
   },
 };

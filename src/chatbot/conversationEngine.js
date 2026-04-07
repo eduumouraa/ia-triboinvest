@@ -6,94 +6,140 @@ const { classificarTemperatura, TEMPERATURA } = require('./leadTemperature');
 const { classificarPerfil, contextoPerfil, textoObjetivoEmocional, PERFIL } = require('./leadProfiles');
 const { selecionarTempero } = require('./temperos');
 const { filtrarFrasesProibidas } = require('./humanization');
+const { detectarObjecao, detectarInteressePositivo, detectarRecusa } = require('./objectionHandler');
 
 const anthropic = new Anthropic({ apiKey: config.anthropic.apiKey });
+
+// ─── PRODUTOS — contexto completo para o Claude ──────────────────────────────
+
+const CONTEXTO_PRODUTOS = `
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+PRODUTO 1 — TRIBO DO INVESTIDOR
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+O QUE É: Uma comunidade ativa de investidores, não apenas um curso.
+DIFERENCIAL: Contato direto com o Lucas. Análises em tempo real. Decisões com segurança.
+PREÇO: 12x R$ 97,00 (= R$ 3,23/dia — menos que um café)
+GARANTIA: 7 dias incondicional — entra, acessa tudo, se não gostar devolve 100%.
+LINK DE COMPRA: https://triboinvest.com.br/tribo-do-investidor/
+PARA QUEM: Quem quer aprender a investir do zero OU quem já investe e quer consistência/evolução.
+
+O QUE ENTREGA:
+• Mentorias ao vivo toda semana com o Lucas (perguntas e respostas em tempo real)
+• Carteiras recomendadas atualizadas (você não precisa escolher sozinho)
+• Análises e alertas exclusivos (já salvou alunos de quedas de 15% em posições erradas)
+• Comunidade ativa de investidores para troca e aprendizado
+• Suporte direto
+
+ARGUMENTOS DE VENDA:
+• "Não é um curso gravado que você assiste e esquece. É uma comunidade viva."
+• "R$ 3,23/dia com garantia de 7 dias — o risco é completamente nosso."
+• "Quem investe sozinho comete erros que custam muito mais que 12x R$ 97."
+• "O Lucas compartilha o que faz na carteira dele — transparência total."
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+PRODUTO 2 — ORGANIZAÇÃO FINANCEIRA E NEGOCIAÇÃO DE DÍVIDAS
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+O QUE É: Um método prático, passo a passo, para organizar finanças e sair das dívidas.
+DIFERENCIAL: Técnicas reais de negociação (desconto de 40% a 70% nas dívidas). Não é teoria.
+PREÇO: R$ 97,00 — PAGAMENTO ÚNICO. SEM MENSALIDADE.
+GARANTIA: 7 dias incondicional — entra, aplica, se não gostar devolve 100%.
+LINK DE COMPRA: https://chk.eduzz.com/8WPNOBJN0P
+PARA QUEM: Quem tem dívidas, está desorganizado, quer dar o primeiro passo real.
+
+O QUE ENTREGA:
+• Organização do zero — método que funciona na vida real, não em planilha bonita
+• Negociação de dívidas — técnicas para conseguir descontos reais com bancos e cartões
+• Construção da reserva de emergência — como guardar mesmo com pouco
+• Base para começar a investir depois de organizar
+
+ARGUMENTOS DE VENDA:
+• "Não é 'corta o cafezinho'. É método real para quem está de verdade no buraco."
+• "R$ 97 único vs. meses de juros compostos. A matemática fala por si."
+• "Nossos alunos conseguem descontos de até 70% na negociação de dívidas."
+• "Ao final, você sai organizado e pronto para dar os primeiros passos como investidor."
+• "Pagamento único — acesso vitalício. Não é assinatura."
+`;
 
 // ─── SYSTEM PROMPT ────────────────────────────────────────────────────────────
 
 function buildSystemPrompt(sessao) {
   const perfil = sessao.perfil || PERFIL.A;
   const ctx = contextoPerfil(perfil);
-  const objetivoEmocional = sessao.objetivoEmocional;
-  const objetivoTexto = objetivoEmocional ? textoObjetivoEmocional(objetivoEmocional) : null;
+  const objetivoTexto = sessao.objetivoEmocional
+    ? textoObjetivoEmocional(sessao.objetivoEmocional)
+    : null;
 
   return `Você é a assistente comercial da Tribo Invest, comunidade de educação financeira liderada pelo Lucas.
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-PERFIL DO LEAD ATUAL: ${perfil.toUpperCase()}
-Tom de voz: ${ctx.tom}
-Drivers de decisão: ${ctx.drivers}
+PERFIL DO LEAD: ${perfil.toUpperCase()}
+Tom: ${ctx.tom}
+Drivers: ${ctx.drivers}
 Evitar: ${ctx.evitar}
-Foco da conversa: ${ctx.foco}
-${objetivoTexto ? `Objetivo emocional do lead: "${objetivoTexto}" — mencione isso quando natural, como "lembrei da sua meta de ${objetivoTexto}"` : ''}
+Foco: ${ctx.foco}
+${objetivoTexto ? `Objetivo emocional: "${objetivoTexto}" — mencione quando natural` : ''}
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-
-PRODUTOS:
-• Tribo do Investidor — 12x R$ 97,00
-  Comunidade, mentorias ao vivo, carteiras recomendadas, análises exclusivas.
-  Ideal para: iniciantes que querem aprender E investidores que querem evoluir.
-
-• Organização Financeira e Negociação de Dívidas — R$ 97,00 (único)
-  Método do zero pra organizar e sair das dívidas.
-  Ideal para: quem tem dívidas e precisa do primeiro passo.
-
-• SCP / SPE (para Perfil C):
-  Projetos de alto potencial (leilões, incorporações) para investidores com capital maior.
-  A Tribo é a porta de entrada para entender e participar dessas operações.
-
+${CONTEXTO_PRODUTOS}
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-REGRAS ABSOLUTAS (violá-las é inaceitável)
+FLUXO DE CONVERSA — ETAPAS
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-❌ NUNCA use: "E aí, decidiu?", "Vai comprar?", "Fechou?", "O que achou?"
-❌ NUNCA pressione. Follow-up é condução de valor, não cobrança.
-❌ NUNCA pule etapas do funil.
-❌ NUNCA invente dados, números ou depoimentos.
-✅ SEMPRE gere um novo loop de curiosidade ou valor quando o lead hesitar.
-✅ SEMPRE chame pelo nome quando souber.
-✅ SEMPRE adapte ao perfil do lead — não trate investidor como iniciante.
-✅ Se perguntar se é IA: "Sou uma assistente virtual da Tribo Invest. Mas fui treinada pra entender o que você precisa de verdade, não pra te vender qualquer coisa."
+BOAS_VINDAS → OBJETIVO → SITUACAO_FINANCEIRA → [EXPERIENCIA] → RENDA
+  → APRESENTACAO_TRIBO ou APRESENTACAO_ORG_FIN
+  → PROPOSTA_TRIBO ou PROPOSTA_ORG_FIN
+  → [OBJECAO se o lead hesitar]
+  → FECHAMENTO_TRIBO ou FECHAMENTO_ORG_FIN
+  → ENCERRADO
 
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-ESTRATÉGIAS DE PERSUASÃO (use com naturalidade)
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-• Ancoragem: R$ 3,23/dia vs cafezinho. Custo de uma decisão errada é muito maior.
-• Reciprocidade: Material gratuito cria dívida de gratidão antes da venda.
-• Garantia: 7 dias incondicional. Risco zero. O medo de errar some.
-• Prova Social: Histórias de alunos que estavam na mesma situação.
-• Curiosidade: "Amanhã o Lucas vai revelar..." — loops que trazem o lead de volta.
-• Escassez (só no encerramento Toque 3): Nunca inventar vagas falsas.
-• Afinidade: Reference o objetivo emocional do lead para mostrar que você lembrou.
+REGRA DA APRESENTAÇÃO:
+Na etapa de APRESENTACAO, construa valor ANTES de falar em preço.
+Faça perguntas que gerem comprometimento ("faz sentido?", "isso é o que você precisa?").
+O lead deve QUERER o produto antes de ouvir o quanto custa.
+
+REGRA DA PROPOSTA:
+Na etapa de PROPOSTA, apresente o preço com ancoragem (R$ 3,23/dia).
+Sempre mencione a garantia de 7 dias — ela elimina o medo de errar.
+CTA claro: ofereça 3 opções (sim / tenho dúvida / preciso pensar).
+
+REGRA DO FECHAMENTO:
+Na etapa de FECHAMENTO, entregue o link sem enrolação.
+Tribo: https://triboinvest.com.br/tribo-do-investidor/
+Org. Financeira: https://chk.eduzz.com/8WPNOBJN0P
+Informe o que fazer após o pagamento. Transmita segurança.
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-DETECÇÃO ESPECIAL — SCP / SPE
+REGRAS ABSOLUTAS
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-Se o lead mencionar: SCP, SPE, leilão, incorporação, patrimônio alto, aporte acima de R$ 50k:
-→ Classificar como Perfil C
-→ Usar o gatilho da Exclusividade
-→ Explicar SCP/SPE brevemente: "É onde você investe em projetos específicos junto com o grupo..."
-→ Posicionar a Tribo como a base e a porta de entrada para essas operações.
+❌ NUNCA: "E aí, decidiu?", "Vai comprar?", "Fechou?", "O que achou?"
+❌ NUNCA inventar números, depoimentos ou promoções inexistentes
+❌ NUNCA dar o link antes da etapa de FECHAMENTO
+✅ SEMPRE construir valor antes de mostrar preço
+✅ SEMPRE usar o nome do lead
+✅ SEMPRE tratar objeção com empatia antes de rebater
+✅ Se perguntar se é IA: "Sou assistente virtual da Tribo Invest — mas meu objetivo é te ajudar de verdade."
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-OUTPUT FORMAT (JSON PURO — sem texto fora do JSON)
+OUTPUT FORMAT — JSON PURO
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 {
-  "resposta": "mensagem exata para o lead (texto limpo, sem markdown)",
+  "resposta": "mensagem para o lead",
   "dadosExtraidos": {
-    "nome": "string ou null",
-    "objetivo": "investir|sair_dividas|aprender|entender|null",
-    "temDividas": true|false|null,
-    "experiencia": "iniciante|basico|intermediario|avancado|null",
-    "renda": "ate_2k|2k_5k|5k_10k|acima_10k|sem_renda|null",
-    "interessado": true|false|null,
-    "bloqueio": "tempo|dinheiro|medo|confianca|prioridade|passo_a_passo|null",
-    "objetivoEmocional": "aposentadoria|familia|liberdade|seguranca|crescimento|dividas|null",
-    "interesseScpSpe": true|false|null
+    "nome": null,
+    "objetivo": null,
+    "temDividas": null,
+    "experiencia": null,
+    "renda": null,
+    "interessado": null,
+    "bloqueio": null,
+    "objetivoEmocional": null,
+    "interesseScpSpe": null,
+    "tipoObjecao": null
   },
-  "perfil": "iniciante|investidor|scp_spe|null",
-  "temperatura": "quente|morno|frio|null",
-  "avancarEtapa": true|false,
+  "perfil": null,
+  "temperatura": null,
+  "avancarEtapa": false,
+  "irParaObjecao": false,
   "encerrarConversa": false,
-  "injetarTempero": true|false
+  "injetarTempero": false
 }`;
 }
 
@@ -112,11 +158,16 @@ async function processarMensagem(mensagemLead, sessao) {
     temperatura: sessao.temperatura,
   });
 
+  // Detecção direta de padrões (evita custo de API para casos óbvios)
+  const eInteresse = detectarInteressePositivo(mensagemLead);
+  const eRecusa = detectarRecusa(mensagemLead);
+  const tipoObjecao = detectarObjecao(mensagemLead);
+
   // Tempero sugerido a cada 4 mensagens
-  const deveTentarTempero = historico.length > 2 && historico.length % 4 === 0;
-  const temperoSugerido = deveTentarTempero
-    ? selecionarTempero(dadosLead.nome, sessao.produtoRecomendado, etapaAtual, temperosUsados)
-    : null;
+  const temperoSugerido =
+    historico.length > 2 && historico.length % 4 === 0
+      ? selecionarTempero(dadosLead.nome, sessao.produtoRecomendado, etapaAtual, temperosUsados)
+      : null;
 
   const contexto = `
 ETAPA ATUAL: ${etapaAtual}
@@ -126,11 +177,17 @@ TEMPERATURA: ${sessao.temperatura || 'não classificada'}
 PERFIL: ${sessao.perfil || 'não classificado'}
 OBJETIVO EMOCIONAL: ${sessao.objetivoEmocional || 'não detectado'}
 TEMPEROS JÁ USADOS: ${temperosUsados.join(', ') || 'nenhum'}
-${temperoSugerido ? `TEMPERO SUGERIDO: "${temperoSugerido.mensagem}"` : ''}
+INTERESSE POSITIVO DETECTADO: ${eInteresse}
+OBJEÇÃO DETECTADA: ${tipoObjecao || 'nenhuma'}
+RECUSA DETECTADA: ${eRecusa}
+${temperoSugerido ? `TEMPERO SUGERIDO (incorpore se natural): "${temperoSugerido.mensagem}"` : ''}
 
 MENSAGEM DO LEAD: "${mensagemLead}"
 
-Interprete, extraia dados, classifique perfil e temperatura, e gere resposta adequada.`;
+Analise, extraia dados e gere a resposta ideal para este momento do funil.
+${eInteresse ? 'O lead sinalizou interesse — avance para a próxima etapa ou feche.' : ''}
+${tipoObjecao ? `Objeção do tipo "${tipoObjecao}" — trate com empatia antes de rebater.` : ''}
+${eRecusa ? 'O lead recusou — encerre com elegância e agende follow-up.' : ''}`;
 
   try {
     const completion = await anthropic.messages.create({
@@ -154,10 +211,9 @@ Interprete, extraia dados, classifique perfil e temperatura, e gere resposta ade
       parsed = { resposta: respostaRaw, dadosExtraidos: {}, avancarEtapa: false, encerrarConversa: false };
     }
 
-    // Filtra frases proibidas de cobrança
     const respostaFiltrada = filtrarFrasesProibidas(parsed.resposta || '');
 
-    // Mescla dados
+    // Mescla dados extraídos
     const dadosAtualizados = {
       ...dadosLead,
       ...Object.fromEntries(
@@ -165,48 +221,29 @@ Interprete, extraia dados, classifique perfil e temperatura, e gere resposta ade
       ),
     };
 
-    // Reclassifica perfil com todos os dados disponíveis
-    const { perfil: novoPerfilCalc, objetivoEmocional: objEmoCalc } = classificarPerfil(
-      dadosAtualizados,
-      historico
-    );
+    // Reclassifica perfil e temperatura
+    const { perfil: perfilCalc, objetivoEmocional: objEmoCalc } = classificarPerfil(dadosAtualizados, historico);
+    const { temperatura: tempCalc, pontuacao } = classificarTemperatura(dadosAtualizados, historico, sessao.pontuacaoTemperatura || 0);
 
-    // Perfil: prioriza o que o Claude detectou se mais específico
-    const perfilFinal = resolverPerfil(
-      sessao.perfil,
-      parsed.perfil,
-      novoPerfilCalc,
-      dadosAtualizados.interesseScpSpe
-    );
+    const perfilFinal = resolverPerfil(sessao.perfil, parsed.perfil, perfilCalc, dadosAtualizados.interesseScpSpe);
+    const temperaturaFinal = resolverTemperatura(sessao.temperatura, parsed.temperatura, tempCalc);
+    const objetivoEmocionalFinal = sessao.objetivoEmocional || parsed.dadosExtraidos?.objetivoEmocional || objEmoCalc || null;
 
-    // Objetivo emocional: preserva o já detectado ou usa o novo
-    const objetivoEmocionalFinal =
-      sessao.objetivoEmocional ||
-      parsed.dadosExtraidos?.objetivoEmocional ||
-      objEmoCalc ||
-      null;
-
-    // Temperatura
-    const { temperatura: novaTemp, pontuacao } = classificarTemperatura(
-      dadosAtualizados,
-      historico,
-      sessao.pontuacaoTemperatura || 0
-    );
-    const temperaturaFinal = resolverTemperatura(sessao.temperatura, parsed.temperatura, novaTemp);
-
-    // Próxima etapa
+    // Determina próxima etapa
     let proximaEtapaInfo = { etapa: etapaAtual };
-    if (parsed.avancarEtapa) {
+    if (parsed.avancarEtapa || eInteresse) {
       proximaEtapaInfo = proximaEtapa(etapaAtual, dadosAtualizados);
+    } else if (parsed.irParaObjecao) {
+      // Vai para etapa de objeção correspondente
+      if (sessao.produtoRecomendado === PRODUTOS.TRIBO) proximaEtapaInfo = { etapa: ETAPAS.OBJECAO_TRIBO };
+      if (sessao.produtoRecomendado === PRODUTOS.ORG_FIN) proximaEtapaInfo = { etapa: ETAPAS.OBJECAO_ORG_FIN };
     }
 
-    // Temperos usados
     const temperosAtualizados = [...temperosUsados];
     if (temperoSugerido && parsed.injetarTempero) {
       temperosAtualizados.push(temperoSugerido.tipo);
     }
 
-    // Historico (mantém últimas 24 mensagens)
     const historicoAtualizado = [
       ...historico,
       { role: 'user', content: contexto },
@@ -225,7 +262,7 @@ Interprete, extraia dados, classifique perfil e temperatura, e gere resposta ade
       temperosUsados: temperosAtualizados,
       historico: historicoAtualizado,
       ultimaInteracao: new Date().toISOString(),
-      encerrada: parsed.encerrarConversa || proximaEtapaInfo.etapa === ETAPAS.ENCERRADO,
+      encerrada: parsed.encerrarConversa || eRecusa || proximaEtapaInfo.etapa === ETAPAS.ENCERRADO,
     };
 
     return { resposta: respostaFiltrada, sessaoAtualizada };
@@ -235,7 +272,7 @@ Interprete, extraia dados, classifique perfil e temperatura, e gere resposta ade
   }
 }
 
-// ─── Resolvers de conflito ────────────────────────────────────────────────────
+// ─── Resolvers ────────────────────────────────────────────────────────────────
 
 function resolverPerfil(anterior, detectadoClaude, calculado, interesseScpSpe) {
   if (interesseScpSpe) return PERFIL.C;
