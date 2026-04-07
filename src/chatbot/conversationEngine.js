@@ -2,87 +2,124 @@ const Anthropic = require('@anthropic-ai/sdk');
 const config = require('../config');
 const logger = require('../config/logger');
 const { ETAPAS, PRODUTOS, MENSAGENS, proximaEtapa } = require('./salesScript');
+const { classificarTemperatura, TEMPERATURA } = require('./leadTemperature');
+const { selecionarTempero } = require('./temperos');
 
 const anthropic = new Anthropic({ apiKey: config.anthropic.apiKey });
 
-/**
- * Prompt base do agente. Define a persona e as regras de comportamento.
- */
+// ─── PROMPT DO AGENTE ────────────────────────────────────────────────────────
+
 const SYSTEM_PROMPT = `Você é a assistente comercial da Tribo Invest, uma comunidade de educação financeira e investimentos liderada pelo Lucas.
 
-Sua missão é:
-1. Recepcionar leads com calor humano e empatia
-2. Qualificá-los seguindo o script de vendas
-3. Interpretar as respostas (mesmo que não sejam os números das opções)
-4. Recomendar o produto certo com base no perfil do lead
-5. Conduzir ao fechamento com naturalidade
+Sua missão é conduzir o lead por um funil de qualificação com calor humano, identificar o produto certo para o perfil dele e, quando o momento chegar, apresentar a oferta com convicção — mas sem pressão.
 
-PRODUTOS:
-- Tribo do Investidor (12x R$97,00): Para quem quer aprender a investir, já está com as finanças organizadas ou quer crescer como investidor.
-- Organização Financeira e Negociação de Dívidas (R$97,00 único): Para quem tem dívidas, está desorganizado financeiramente e precisa dar o primeiro passo.
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+PRODUTOS QUE VOCÊ REPRESENTA
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+• Tribo do Investidor — 12x R$ 97,00
+  Para quem quer aprender a investir, já está organizado financeiramente ou quer crescer como investidor.
+  Inclui: comunidade ativa, mentorias ao vivo com Lucas, carteiras recomendadas, análises exclusivas.
 
-REGRAS DE COMPORTAMENTO:
-- Seja caloroso, próximo, use emojis com moderação
-- Use linguagem simples, sem jargões
-- Nunca minta ou force uma venda que não faz sentido pro lead
-- Se o lead tiver dívidas, não empurre a Tribo — ofereça o Org. Financeira primeiro
-- Se o lead perguntar algo fora do script, responda com naturalidade e volte ao fluxo
-- Extraia as informações-chave: nome, objetivo, se tem dívidas, experiência com investimentos, renda aproximada
-- Quando identificar o produto certo, apresente com entusiasmo genuíno
-- Nunca revelar que é uma IA, a menos que perguntado diretamente — nesse caso, seja honesto
+• Organização Financeira e Negociação de Dívidas — R$ 97,00 (pagamento único)
+  Para quem tem dívidas, está desorganizado e precisa dar o primeiro passo.
+  Inclui: método de organização do zero, estratégias de negociação, construção de reserva.
 
-INTERPRETAÇÃO DE RESPOSTAS:
-- "1", "primeira", "opção 1" → opção 1
-- "tenho dívida", "devo no cartão" → tem dívidas = sim
-- "quero investir", "começar a investir" → objetivo = investir
-- "nunca investi" → experiência = iniciante
-- Sempre confirme o entendimento antes de avançar se a resposta for ambígua
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+REGRAS INEGOCIÁVEIS
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+1. NUNCA pressione. Follow-up é condução, nunca cobrança.
+2. NUNCA pergunte "Decidiu?" ou "Vai comprar?". Use gatilhos de valor.
+3. NUNCA pule etapas do funil.
+4. SEMPRE chame o lead pelo nome quando souber.
+5. Linguagem natural, curta e direta. Nunca soe como robô ou roteiro de spam.
+6. Se o lead tiver dívidas, ofereça o Org. Financeira — não force a Tribo.
+7. Se perguntar se você é IA, seja honesto: "Sou uma assistente virtual da Tribo Invest. Mas o que posso dizer é que meu objetivo é te ajudar de verdade, não te empurrar nada."
+8. Nunca prometa o que não existe. Não invente números ou depoimentos.
 
-OUTPUT FORMAT:
-Retorne APENAS um JSON válido com:
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+ESTRATÉGIAS DE PERSUASÃO (use com naturalidade)
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+• Ancoragem: Comparar R$ 97 com cafezinho (R$ 3,23/dia) ou custo de um erro financeiro.
+• Reciprocidade: Oferecer material gratuito antes de vender cria gratidão genuína.
+• Garantia: 7 dias de garantia incondicional. Risco é zero para o lead.
+• Prova Social: Histórias reais de alunos que estavam na mesma situação.
+• Escassez (só no encerramento): Não garantir condições futuras — nunca inventar vagas falsas.
+• Curiosidade: Loops abertos ("amanhã o Lucas vai revelar...") que trazem o lead de volta.
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+INTERPRETAÇÃO DE RESPOSTAS
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+• "1", "primeira opção", "opção um" → selecionar opção 1
+• "tenho dívida", "tô devendo" → temDividas: true
+• "quero investir", "começar a investir" → objetivo: "investir"
+• "interessante", "parece bom" → sinal morno (não avançar para oferta ainda)
+• "quanto custa", "como faço pra entrar", "quero" → sinal quente (lead pronto)
+• "não tenho dinheiro", "tá caro" → objeção financeira → aplicar tempero de ancoragem
+• "vou pensar" → objeção de tempo/confiança → aplicar curiosidade ou reciprocidade
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+CLASSIFICAÇÃO DE TEMPERATURA
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+• QUENTE: Lead sinalizou intenção clara de compra → marcar como quente, notificar Eduardo.
+• MORNO: Interessado mas com dúvidas → continuar conduzindo, injetar temperos.
+• FRIO: Resistência alta ou desengajamento → não insistir, agendar follow-up suave.
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+OUTPUT FORMAT (OBRIGATÓRIO — JSON PURO)
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 {
-  "resposta": "mensagem para enviar ao lead",
+  "resposta": "mensagem exata para enviar ao lead",
   "dadosExtraidos": {
-    "nome": "...",
+    "nome": "string ou null",
     "objetivo": "investir|sair_dividas|aprender|entender|null",
     "temDividas": true|false|null,
     "experiencia": "iniciante|basico|intermediario|avancado|null",
     "renda": "ate_2k|2k_5k|5k_10k|acima_10k|sem_renda|null",
-    "interessado": true|false|null
+    "interessado": true|false|null,
+    "bloqueio": "tempo|dinheiro|confianca|prioridade|null"
   },
+  "temperatura": "quente|morno|frio|null",
   "avancarEtapa": true|false,
-  "encerrarConversa": false
+  "encerrarConversa": true|false,
+  "injetarTempero": true|false
 }`;
 
+// ─── PROCESSAMENTO PRINCIPAL ─────────────────────────────────────────────────
+
 /**
- * Processa a mensagem do lead e retorna a resposta do agente.
- * @param {string} mensagemLead - Texto enviado pelo lead
- * @param {object} sessao - Estado atual da conversa (etapa, dados coletados, histórico)
- * @returns {Promise<{resposta: string, sessaoAtualizada: object}>}
+ * Processa a mensagem do lead e retorna resposta + estado atualizado da sessão.
  */
 async function processarMensagem(mensagemLead, sessao) {
   const historico = sessao.historico || [];
   const etapaAtual = sessao.etapa || ETAPAS.BOAS_VINDAS;
   const dadosLead = sessao.dadosLead || {};
+  const temperosUsados = sessao.temperosUsados || [];
 
   logger.info('Processando mensagem', {
     leadId: sessao.leadId,
     etapa: etapaAtual,
-    mensagem: mensagemLead.substring(0, 50),
+    temperatura: sessao.temperatura,
+    mensagem: mensagemLead.substring(0, 60),
   });
 
-  // Monta contexto rico para o Claude
+  // Seleciona tempero se for hora de injetar (a cada 2 etapas)
+  const deveTentarTempero = historico.length > 2 && historico.length % 4 === 0;
+  const temperoSugerido = deveTentarTempero
+    ? selecionarTempero(dadosLead.nome, sessao.produtoRecomendado, etapaAtual, temperosUsados)
+    : null;
+
   const contextoEtapa = `
 ETAPA ATUAL: ${etapaAtual}
-DADOS JÁ COLETADOS: ${JSON.stringify(dadosLead)}
-PRODUTO RECOMENDADO (se já determinado): ${sessao.produtoRecomendado || 'ainda não determinado'}
+DADOS COLETADOS: ${JSON.stringify(dadosLead)}
+PRODUTO RECOMENDADO: ${sessao.produtoRecomendado || 'ainda não determinado'}
+TEMPERATURA ATUAL: ${sessao.temperatura || 'não classificada'}
+TEMPEROS JÁ USADOS: ${temperosUsados.join(', ') || 'nenhum'}
+${temperoSugerido ? `TEMPERO SUGERIDO PARA INJETAR (adapte naturalmente): "${temperoSugerido.mensagem}"` : ''}
 
 MENSAGEM DO LEAD: "${mensagemLead}"
 
-Interprete a mensagem, extraia dados relevantes, e gere a resposta adequada para avançar no funil.
-Se a etapa for BOAS_VINDAS e ainda não temos o nome, pergunte o nome.
-Se já temos o nome, avance para a próxima pergunta do script.
-`;
+Interprete a mensagem, extraia dados, classifique a temperatura e gere a resposta para avançar no funil.
+${temperoSugerido ? 'Se for natural, incorpore o tempero sugerido na resposta.' : ''}`;
 
   try {
     const completion = await anthropic.messages.create({
@@ -97,22 +134,23 @@ Se já temos o nome, avance para a próxima pergunta do script.
 
     const respostaRaw = completion.content[0].text.trim();
 
-    // Parse do JSON retornado pelo Claude
     let respostaParsed;
     try {
       const jsonMatch = respostaRaw.match(/\{[\s\S]*\}/);
       respostaParsed = JSON.parse(jsonMatch ? jsonMatch[0] : respostaRaw);
     } catch {
-      logger.warn('Falha ao parsear JSON do Claude, usando resposta bruta');
+      logger.warn('Falha ao parsear JSON do Claude');
       respostaParsed = {
         resposta: respostaRaw,
         dadosExtraidos: {},
+        temperatura: null,
         avancarEtapa: false,
         encerrarConversa: false,
+        injetarTempero: false,
       };
     }
 
-    // Mescla dados extraídos com os já coletados
+    // Mescla dados extraídos
     const dadosAtualizados = {
       ...dadosLead,
       ...Object.fromEntries(
@@ -120,44 +158,75 @@ Se já temos o nome, avance para a próxima pergunta do script.
       ),
     };
 
-    // Determina próxima etapa
+    // Reclassifica temperatura com todos os dados disponíveis
+    const { temperatura: novaTemperatura, pontuacao } = classificarTemperatura(
+      dadosAtualizados,
+      historico,
+      sessao.pontuacaoTemperatura || 0
+    );
+
+    // Temperatura final: prioriza o que o Claude detectou se mais quente
+    const temperaturaFinal = resolverTemperatura(
+      sessao.temperatura,
+      respostaParsed.temperatura,
+      novaTemperatura
+    );
+
+    // Próxima etapa
     let proximaEtapaInfo = { etapa: etapaAtual };
     if (respostaParsed.avancarEtapa) {
       proximaEtapaInfo = proximaEtapa(etapaAtual, dadosAtualizados);
     }
 
-    // Atualiza histórico para manter contexto
+    // Registra tempero usado
+    const temperosAtualizados = [...temperosUsados];
+    if (temperoSugerido && respostaParsed.injetarTempero) {
+      temperosAtualizados.push(temperoSugerido.tipo);
+    }
+
+    // Atualiza histórico
     const historicoAtualizado = [
       ...historico,
       { role: 'user', content: contextoEtapa },
       { role: 'assistant', content: respostaRaw },
-    ].slice(-20); // Mantém últimas 20 mensagens para não estourar contexto
+    ].slice(-24);
 
     const sessaoAtualizada = {
       ...sessao,
       etapa: proximaEtapaInfo.etapa,
       dadosLead: dadosAtualizados,
       produtoRecomendado: proximaEtapaInfo.produto || sessao.produtoRecomendado,
+      temperatura: temperaturaFinal,
+      pontuacaoTemperatura: pontuacao,
+      temperosUsados: temperosAtualizados,
       historico: historicoAtualizado,
       ultimaInteracao: new Date().toISOString(),
       encerrada: respostaParsed.encerrarConversa || proximaEtapaInfo.etapa === ETAPAS.ENCERRADO,
     };
 
-    return {
-      resposta: respostaParsed.resposta,
-      sessaoAtualizada,
-    };
+    return { resposta: respostaParsed.resposta, sessaoAtualizada };
   } catch (error) {
-    logger.error('Erro ao processar mensagem com Claude', { error: error.message });
+    logger.error('Erro ao processar com Claude', { error: error.message });
     throw error;
   }
 }
 
 /**
- * Gera mensagem inicial de boas-vindas para um novo lead.
+ * Resolve conflito entre temperatura anterior e a nova detecção.
+ * Temperatura nunca "esfria" — um lead quente continua quente.
  */
+function resolverTemperatura(anterior, detectadaClaude, calculada) {
+  const ordem = [TEMPERATURA.FRIO, TEMPERATURA.MORNO, TEMPERATURA.QUENTE];
+  const max = [anterior, detectadaClaude, calculada]
+    .filter(Boolean)
+    .reduce((melhor, atual) => {
+      return ordem.indexOf(atual) > ordem.indexOf(melhor) ? atual : melhor;
+    }, TEMPERATURA.FRIO);
+  return max;
+}
+
 function mensagemBoasVindas() {
   return MENSAGENS[ETAPAS.BOAS_VINDAS]();
 }
 
-module.exports = { processarMensagem, mensagemBoasVindas, ETAPAS, PRODUTOS };
+module.exports = { processarMensagem, mensagemBoasVindas, ETAPAS, PRODUTOS, TEMPERATURA };
