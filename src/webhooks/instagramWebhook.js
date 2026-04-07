@@ -2,12 +2,13 @@ const express = require('express');
 const router = express.Router();
 const { validarAssinatura, extrairMensagens, enviarMensagem, marcarComoVisto, mostrarDigitando } = require('../integrations/instagram');
 const { processarLeadIncoming } = require('../handlers/leadHandler');
+const { aguardarDelay, sleep } = require('../chatbot/humanization');
 const config = require('../config');
 const logger = require('../config/logger');
 
 /**
  * GET /webhook/instagram
- * Verificação do webhook pelo Facebook/Meta (obrigatório na configuração)
+ * Verificação do webhook pelo Facebook/Meta
  */
 router.get('/', (req, res) => {
   const mode = req.query['hub.mode'];
@@ -25,13 +26,11 @@ router.get('/', (req, res) => {
 
 /**
  * POST /webhook/instagram
- * Recebe eventos do Instagram (mensagens diretas, comentários, etc.)
+ * Recebe DMs do Instagram. Responde 200 imediatamente e processa assincronamente.
  */
 router.post('/', express.raw({ type: 'application/json' }), async (req, res) => {
-  // Responde 200 imediatamente para o Meta não reenviar o evento
   res.sendStatus(200);
 
-  // Valida assinatura de segurança
   const signature = req.headers['x-hub-signature-256'];
   if (config.meta.appSecret && signature) {
     try {
@@ -57,40 +56,52 @@ router.post('/', express.raw({ type: 'application/json' }), async (req, res) => 
 
   for (const { senderId, texto } of mensagens) {
     if (!texto) continue;
+    logger.info('DM Instagram recebida', { senderId, preview: texto.substring(0, 60) });
 
-    logger.info('Mensagem Instagram recebida', {
-      senderId,
-      texto: texto.substring(0, 60),
-    });
-
-    // Processa de forma assíncrona sem bloquear
+    // Processa assincronamente com delay de humanização
     processar(senderId, texto).catch((err) =>
       logger.error('Erro no processamento assíncrono', { err: err.message, senderId })
     );
   }
 });
 
+/**
+ * Pipeline de processamento com humanização completa:
+ * 1. Marca como visto imediatamente (lead vê que foi lido)
+ * 2. Processa a mensagem e gera resposta
+ * 3. Aguarda delay de 1 a 3 minutos (simula leitura + digitação)
+ * 4. Ativa "digitando..." no Instagram
+ * 5. Envia a resposta
+ */
 async function processar(senderId, texto) {
   try {
+    // Marca visto imediatamente — sinal de presença humana
     await marcarComoVisto(senderId);
-    await mostrarDigitando(senderId);
 
+    // Gera a resposta (rápido — o delay vem depois)
     const respostas = await processarLeadIncoming(senderId, texto, 'instagram');
 
-    for (const resposta of respostas) {
-      // Pequena pausa entre mensagens para parecer mais natural
-      if (respostas.indexOf(resposta) > 0) {
-        await sleep(1200);
+    // Aguarda delay humanizado antes de enviar (1-3 min em produção)
+    await aguardarDelay();
+
+    for (let i = 0; i < respostas.length; i++) {
+      // Ativa "digitando..." antes de cada mensagem
+      await mostrarDigitando(senderId);
+
+      // Delay proporcional ao tamanho da mensagem (simula digitação real)
+      const tempoDigitacao = Math.min(respostas[i].length * 25, 4000); // max 4s
+      await sleep(tempoDigitacao);
+
+      await enviarMensagem(senderId, respostas[i]);
+
+      // Pausa entre mensagens múltiplas
+      if (i < respostas.length - 1) {
+        await sleep(1500);
       }
-      await enviarMensagem(senderId, resposta);
     }
   } catch (error) {
     logger.error('Erro ao processar e responder lead Instagram', { error: error.message, senderId });
   }
-}
-
-function sleep(ms) {
-  return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
 module.exports = router;

@@ -3,72 +3,81 @@ const config = require('../config');
 const logger = require('../config/logger');
 const { ETAPAS, PRODUTOS, MENSAGENS, proximaEtapa } = require('./salesScript');
 const { classificarTemperatura, TEMPERATURA } = require('./leadTemperature');
+const { classificarPerfil, contextoPerfil, textoObjetivoEmocional, PERFIL } = require('./leadProfiles');
 const { selecionarTempero } = require('./temperos');
+const { filtrarFrasesProibidas } = require('./humanization');
 
 const anthropic = new Anthropic({ apiKey: config.anthropic.apiKey });
 
-// ─── PROMPT DO AGENTE ────────────────────────────────────────────────────────
+// ─── SYSTEM PROMPT ────────────────────────────────────────────────────────────
 
-const SYSTEM_PROMPT = `Você é a assistente comercial da Tribo Invest, uma comunidade de educação financeira e investimentos liderada pelo Lucas.
+function buildSystemPrompt(sessao) {
+  const perfil = sessao.perfil || PERFIL.A;
+  const ctx = contextoPerfil(perfil);
+  const objetivoEmocional = sessao.objetivoEmocional;
+  const objetivoTexto = objetivoEmocional ? textoObjetivoEmocional(objetivoEmocional) : null;
 
-Sua missão é conduzir o lead por um funil de qualificação com calor humano, identificar o produto certo para o perfil dele e, quando o momento chegar, apresentar a oferta com convicção — mas sem pressão.
+  return `Você é a assistente comercial da Tribo Invest, comunidade de educação financeira liderada pelo Lucas.
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-PRODUTOS QUE VOCÊ REPRESENTA
+PERFIL DO LEAD ATUAL: ${perfil.toUpperCase()}
+Tom de voz: ${ctx.tom}
+Drivers de decisão: ${ctx.drivers}
+Evitar: ${ctx.evitar}
+Foco da conversa: ${ctx.foco}
+${objetivoTexto ? `Objetivo emocional do lead: "${objetivoTexto}" — mencione isso quando natural, como "lembrei da sua meta de ${objetivoTexto}"` : ''}
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+PRODUTOS:
 • Tribo do Investidor — 12x R$ 97,00
-  Para quem quer aprender a investir, já está organizado financeiramente ou quer crescer como investidor.
-  Inclui: comunidade ativa, mentorias ao vivo com Lucas, carteiras recomendadas, análises exclusivas.
+  Comunidade, mentorias ao vivo, carteiras recomendadas, análises exclusivas.
+  Ideal para: iniciantes que querem aprender E investidores que querem evoluir.
 
-• Organização Financeira e Negociação de Dívidas — R$ 97,00 (pagamento único)
-  Para quem tem dívidas, está desorganizado e precisa dar o primeiro passo.
-  Inclui: método de organização do zero, estratégias de negociação, construção de reserva.
+• Organização Financeira e Negociação de Dívidas — R$ 97,00 (único)
+  Método do zero pra organizar e sair das dívidas.
+  Ideal para: quem tem dívidas e precisa do primeiro passo.
+
+• SCP / SPE (para Perfil C):
+  Projetos de alto potencial (leilões, incorporações) para investidores com capital maior.
+  A Tribo é a porta de entrada para entender e participar dessas operações.
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-REGRAS INEGOCIÁVEIS
+REGRAS ABSOLUTAS (violá-las é inaceitável)
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-1. NUNCA pressione. Follow-up é condução, nunca cobrança.
-2. NUNCA pergunte "Decidiu?" ou "Vai comprar?". Use gatilhos de valor.
-3. NUNCA pule etapas do funil.
-4. SEMPRE chame o lead pelo nome quando souber.
-5. Linguagem natural, curta e direta. Nunca soe como robô ou roteiro de spam.
-6. Se o lead tiver dívidas, ofereça o Org. Financeira — não force a Tribo.
-7. Se perguntar se você é IA, seja honesto: "Sou uma assistente virtual da Tribo Invest. Mas o que posso dizer é que meu objetivo é te ajudar de verdade, não te empurrar nada."
-8. Nunca prometa o que não existe. Não invente números ou depoimentos.
+❌ NUNCA use: "E aí, decidiu?", "Vai comprar?", "Fechou?", "O que achou?"
+❌ NUNCA pressione. Follow-up é condução de valor, não cobrança.
+❌ NUNCA pule etapas do funil.
+❌ NUNCA invente dados, números ou depoimentos.
+✅ SEMPRE gere um novo loop de curiosidade ou valor quando o lead hesitar.
+✅ SEMPRE chame pelo nome quando souber.
+✅ SEMPRE adapte ao perfil do lead — não trate investidor como iniciante.
+✅ Se perguntar se é IA: "Sou uma assistente virtual da Tribo Invest. Mas fui treinada pra entender o que você precisa de verdade, não pra te vender qualquer coisa."
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 ESTRATÉGIAS DE PERSUASÃO (use com naturalidade)
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-• Ancoragem: Comparar R$ 97 com cafezinho (R$ 3,23/dia) ou custo de um erro financeiro.
-• Reciprocidade: Oferecer material gratuito antes de vender cria gratidão genuína.
-• Garantia: 7 dias de garantia incondicional. Risco é zero para o lead.
-• Prova Social: Histórias reais de alunos que estavam na mesma situação.
-• Escassez (só no encerramento): Não garantir condições futuras — nunca inventar vagas falsas.
-• Curiosidade: Loops abertos ("amanhã o Lucas vai revelar...") que trazem o lead de volta.
+• Ancoragem: R$ 3,23/dia vs cafezinho. Custo de uma decisão errada é muito maior.
+• Reciprocidade: Material gratuito cria dívida de gratidão antes da venda.
+• Garantia: 7 dias incondicional. Risco zero. O medo de errar some.
+• Prova Social: Histórias de alunos que estavam na mesma situação.
+• Curiosidade: "Amanhã o Lucas vai revelar..." — loops que trazem o lead de volta.
+• Escassez (só no encerramento Toque 3): Nunca inventar vagas falsas.
+• Afinidade: Reference o objetivo emocional do lead para mostrar que você lembrou.
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-INTERPRETAÇÃO DE RESPOSTAS
+DETECÇÃO ESPECIAL — SCP / SPE
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-• "1", "primeira opção", "opção um" → selecionar opção 1
-• "tenho dívida", "tô devendo" → temDividas: true
-• "quero investir", "começar a investir" → objetivo: "investir"
-• "interessante", "parece bom" → sinal morno (não avançar para oferta ainda)
-• "quanto custa", "como faço pra entrar", "quero" → sinal quente (lead pronto)
-• "não tenho dinheiro", "tá caro" → objeção financeira → aplicar tempero de ancoragem
-• "vou pensar" → objeção de tempo/confiança → aplicar curiosidade ou reciprocidade
+Se o lead mencionar: SCP, SPE, leilão, incorporação, patrimônio alto, aporte acima de R$ 50k:
+→ Classificar como Perfil C
+→ Usar o gatilho da Exclusividade
+→ Explicar SCP/SPE brevemente: "É onde você investe em projetos específicos junto com o grupo..."
+→ Posicionar a Tribo como a base e a porta de entrada para essas operações.
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-CLASSIFICAÇÃO DE TEMPERATURA
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-• QUENTE: Lead sinalizou intenção clara de compra → marcar como quente, notificar Eduardo.
-• MORNO: Interessado mas com dúvidas → continuar conduzindo, injetar temperos.
-• FRIO: Resistência alta ou desengajamento → não insistir, agendar follow-up suave.
-
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-OUTPUT FORMAT (OBRIGATÓRIO — JSON PURO)
+OUTPUT FORMAT (JSON PURO — sem texto fora do JSON)
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 {
-  "resposta": "mensagem exata para enviar ao lead",
+  "resposta": "mensagem exata para o lead (texto limpo, sem markdown)",
   "dadosExtraidos": {
     "nome": "string ou null",
     "objetivo": "investir|sair_dividas|aprender|entender|null",
@@ -76,19 +85,20 @@ OUTPUT FORMAT (OBRIGATÓRIO — JSON PURO)
     "experiencia": "iniciante|basico|intermediario|avancado|null",
     "renda": "ate_2k|2k_5k|5k_10k|acima_10k|sem_renda|null",
     "interessado": true|false|null,
-    "bloqueio": "tempo|dinheiro|confianca|prioridade|null"
+    "bloqueio": "tempo|dinheiro|medo|confianca|prioridade|passo_a_passo|null",
+    "objetivoEmocional": "aposentadoria|familia|liberdade|seguranca|crescimento|dividas|null",
+    "interesseScpSpe": true|false|null
   },
+  "perfil": "iniciante|investidor|scp_spe|null",
   "temperatura": "quente|morno|frio|null",
   "avancarEtapa": true|false,
-  "encerrarConversa": true|false,
+  "encerrarConversa": false,
   "injetarTempero": true|false
 }`;
+}
 
-// ─── PROCESSAMENTO PRINCIPAL ─────────────────────────────────────────────────
+// ─── PROCESSAMENTO PRINCIPAL ──────────────────────────────────────────────────
 
-/**
- * Processa a mensagem do lead e retorna resposta + estado atualizado da sessão.
- */
 async function processarMensagem(mensagemLead, sessao) {
   const historico = sessao.historico || [];
   const etapaAtual = sessao.etapa || ETAPAS.BOAS_VINDAS;
@@ -98,96 +108,108 @@ async function processarMensagem(mensagemLead, sessao) {
   logger.info('Processando mensagem', {
     leadId: sessao.leadId,
     etapa: etapaAtual,
+    perfil: sessao.perfil,
     temperatura: sessao.temperatura,
-    mensagem: mensagemLead.substring(0, 60),
   });
 
-  // Seleciona tempero se for hora de injetar (a cada 2 etapas)
+  // Tempero sugerido a cada 4 mensagens
   const deveTentarTempero = historico.length > 2 && historico.length % 4 === 0;
   const temperoSugerido = deveTentarTempero
     ? selecionarTempero(dadosLead.nome, sessao.produtoRecomendado, etapaAtual, temperosUsados)
     : null;
 
-  const contextoEtapa = `
+  const contexto = `
 ETAPA ATUAL: ${etapaAtual}
 DADOS COLETADOS: ${JSON.stringify(dadosLead)}
-PRODUTO RECOMENDADO: ${sessao.produtoRecomendado || 'ainda não determinado'}
-TEMPERATURA ATUAL: ${sessao.temperatura || 'não classificada'}
+PRODUTO RECOMENDADO: ${sessao.produtoRecomendado || 'não determinado'}
+TEMPERATURA: ${sessao.temperatura || 'não classificada'}
+PERFIL: ${sessao.perfil || 'não classificado'}
+OBJETIVO EMOCIONAL: ${sessao.objetivoEmocional || 'não detectado'}
 TEMPEROS JÁ USADOS: ${temperosUsados.join(', ') || 'nenhum'}
-${temperoSugerido ? `TEMPERO SUGERIDO PARA INJETAR (adapte naturalmente): "${temperoSugerido.mensagem}"` : ''}
+${temperoSugerido ? `TEMPERO SUGERIDO: "${temperoSugerido.mensagem}"` : ''}
 
 MENSAGEM DO LEAD: "${mensagemLead}"
 
-Interprete a mensagem, extraia dados, classifique a temperatura e gere a resposta para avançar no funil.
-${temperoSugerido ? 'Se for natural, incorpore o tempero sugerido na resposta.' : ''}`;
+Interprete, extraia dados, classifique perfil e temperatura, e gere resposta adequada.`;
 
   try {
     const completion = await anthropic.messages.create({
       model: config.anthropic.model,
       max_tokens: 1024,
-      system: SYSTEM_PROMPT,
+      system: buildSystemPrompt(sessao),
       messages: [
         ...historico,
-        { role: 'user', content: contextoEtapa },
+        { role: 'user', content: contexto },
       ],
     });
 
     const respostaRaw = completion.content[0].text.trim();
 
-    let respostaParsed;
+    let parsed;
     try {
-      const jsonMatch = respostaRaw.match(/\{[\s\S]*\}/);
-      respostaParsed = JSON.parse(jsonMatch ? jsonMatch[0] : respostaRaw);
+      const match = respostaRaw.match(/\{[\s\S]*\}/);
+      parsed = JSON.parse(match ? match[0] : respostaRaw);
     } catch {
       logger.warn('Falha ao parsear JSON do Claude');
-      respostaParsed = {
-        resposta: respostaRaw,
-        dadosExtraidos: {},
-        temperatura: null,
-        avancarEtapa: false,
-        encerrarConversa: false,
-        injetarTempero: false,
-      };
+      parsed = { resposta: respostaRaw, dadosExtraidos: {}, avancarEtapa: false, encerrarConversa: false };
     }
 
-    // Mescla dados extraídos
+    // Filtra frases proibidas de cobrança
+    const respostaFiltrada = filtrarFrasesProibidas(parsed.resposta || '');
+
+    // Mescla dados
     const dadosAtualizados = {
       ...dadosLead,
       ...Object.fromEntries(
-        Object.entries(respostaParsed.dadosExtraidos || {}).filter(([, v]) => v !== null)
+        Object.entries(parsed.dadosExtraidos || {}).filter(([, v]) => v !== null && v !== undefined)
       ),
     };
 
-    // Reclassifica temperatura com todos os dados disponíveis
-    const { temperatura: novaTemperatura, pontuacao } = classificarTemperatura(
+    // Reclassifica perfil com todos os dados disponíveis
+    const { perfil: novoPerfilCalc, objetivoEmocional: objEmoCalc } = classificarPerfil(
+      dadosAtualizados,
+      historico
+    );
+
+    // Perfil: prioriza o que o Claude detectou se mais específico
+    const perfilFinal = resolverPerfil(
+      sessao.perfil,
+      parsed.perfil,
+      novoPerfilCalc,
+      dadosAtualizados.interesseScpSpe
+    );
+
+    // Objetivo emocional: preserva o já detectado ou usa o novo
+    const objetivoEmocionalFinal =
+      sessao.objetivoEmocional ||
+      parsed.dadosExtraidos?.objetivoEmocional ||
+      objEmoCalc ||
+      null;
+
+    // Temperatura
+    const { temperatura: novaTemp, pontuacao } = classificarTemperatura(
       dadosAtualizados,
       historico,
       sessao.pontuacaoTemperatura || 0
     );
-
-    // Temperatura final: prioriza o que o Claude detectou se mais quente
-    const temperaturaFinal = resolverTemperatura(
-      sessao.temperatura,
-      respostaParsed.temperatura,
-      novaTemperatura
-    );
+    const temperaturaFinal = resolverTemperatura(sessao.temperatura, parsed.temperatura, novaTemp);
 
     // Próxima etapa
     let proximaEtapaInfo = { etapa: etapaAtual };
-    if (respostaParsed.avancarEtapa) {
+    if (parsed.avancarEtapa) {
       proximaEtapaInfo = proximaEtapa(etapaAtual, dadosAtualizados);
     }
 
-    // Registra tempero usado
+    // Temperos usados
     const temperosAtualizados = [...temperosUsados];
-    if (temperoSugerido && respostaParsed.injetarTempero) {
+    if (temperoSugerido && parsed.injetarTempero) {
       temperosAtualizados.push(temperoSugerido.tipo);
     }
 
-    // Atualiza histórico
+    // Historico (mantém últimas 24 mensagens)
     const historicoAtualizado = [
       ...historico,
-      { role: 'user', content: contextoEtapa },
+      { role: 'user', content: contexto },
       { role: 'assistant', content: respostaRaw },
     ].slice(-24);
 
@@ -195,38 +217,42 @@ ${temperoSugerido ? 'Se for natural, incorpore o tempero sugerido na resposta.' 
       ...sessao,
       etapa: proximaEtapaInfo.etapa,
       dadosLead: dadosAtualizados,
-      produtoRecomendado: proximaEtapaInfo.produto || sessao.produtoRecomendado,
+      perfil: perfilFinal,
       temperatura: temperaturaFinal,
       pontuacaoTemperatura: pontuacao,
+      objetivoEmocional: objetivoEmocionalFinal,
+      produtoRecomendado: proximaEtapaInfo.produto || sessao.produtoRecomendado,
       temperosUsados: temperosAtualizados,
       historico: historicoAtualizado,
       ultimaInteracao: new Date().toISOString(),
-      encerrada: respostaParsed.encerrarConversa || proximaEtapaInfo.etapa === ETAPAS.ENCERRADO,
+      encerrada: parsed.encerrarConversa || proximaEtapaInfo.etapa === ETAPAS.ENCERRADO,
     };
 
-    return { resposta: respostaParsed.resposta, sessaoAtualizada };
+    return { resposta: respostaFiltrada, sessaoAtualizada };
   } catch (error) {
     logger.error('Erro ao processar com Claude', { error: error.message });
     throw error;
   }
 }
 
-/**
- * Resolve conflito entre temperatura anterior e a nova detecção.
- * Temperatura nunca "esfria" — um lead quente continua quente.
- */
+// ─── Resolvers de conflito ────────────────────────────────────────────────────
+
+function resolverPerfil(anterior, detectadoClaude, calculado, interesseScpSpe) {
+  if (interesseScpSpe) return PERFIL.C;
+  if (detectadoClaude === 'scp_spe' || calculado === PERFIL.C) return PERFIL.C;
+  if (detectadoClaude === 'investidor' || calculado === PERFIL.B) return PERFIL.B;
+  return anterior || calculado || PERFIL.A;
+}
+
 function resolverTemperatura(anterior, detectadaClaude, calculada) {
   const ordem = [TEMPERATURA.FRIO, TEMPERATURA.MORNO, TEMPERATURA.QUENTE];
-  const max = [anterior, detectadaClaude, calculada]
+  return [anterior, detectadaClaude, calculada]
     .filter(Boolean)
-    .reduce((melhor, atual) => {
-      return ordem.indexOf(atual) > ordem.indexOf(melhor) ? atual : melhor;
-    }, TEMPERATURA.FRIO);
-  return max;
+    .reduce((melhor, atual) => (ordem.indexOf(atual) > ordem.indexOf(melhor) ? atual : melhor), TEMPERATURA.FRIO);
 }
 
 function mensagemBoasVindas() {
   return MENSAGENS[ETAPAS.BOAS_VINDAS]();
 }
 
-module.exports = { processarMensagem, mensagemBoasVindas, ETAPAS, PRODUTOS, TEMPERATURA };
+module.exports = { processarMensagem, mensagemBoasVindas, ETAPAS, PRODUTOS, TEMPERATURA, PERFIL };

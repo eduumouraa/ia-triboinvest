@@ -88,7 +88,12 @@ async function executarAcoesPosMensagem(sessaoAnterior, sessaoAtualizada, platfo
     if (produtoDefinido && dadosLead.nome) {
       agendarCicloFollowUp(
         platformId,
-        { ...dadosLead, produtoRecomendado },
+        {
+          ...dadosLead,
+          produtoRecomendado,
+          perfil: sessaoAtualizada.perfil,
+          objetivoEmocional: sessaoAtualizada.objetivoEmocional,
+        },
         temperatura || TEMPERATURA.MORNO
       );
       sessaoAtualizada.followUpAgendado = true;
