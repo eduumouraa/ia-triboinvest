@@ -189,4 +189,46 @@ function formatarHistoricoParaNota(historico) {
     .substring(0, 3000); // Limite de caracteres do Kommo
 }
 
-module.exports = { criarLead, criarContato, adicionarNota, atualizarEstagio };
+/**
+ * Adiciona uma mensagem do bot como nota interna no lead do Kommo.
+ * O prefixo [BOT] identifica notas geradas pelo agente, evitando loop de respostas.
+ *
+ * @param {string} leadId - ID do lead no Kommo
+ * @param {string} mensagem - Texto gerado pelo agente de IA
+ * @param {string} [prefixo] - Rótulo opcional (ex: 'Primeira Mensagem', 'Resposta')
+ */
+async function adicionarMensagemBot(leadId, mensagem, prefixo = 'Bot') {
+  const texto = `[BOT] ${prefixo}:\n\n${mensagem}`;
+
+  try {
+    await axios.post(
+      `${config.kommo.baseUrl}/api/v4/leads/${leadId}/notes`,
+      [{ note_type: 'common', params: { text: texto } }],
+      { headers: headers() }
+    );
+    logger.info('Mensagem do bot adicionada ao lead no Kommo', { leadId, prefixo });
+  } catch (error) {
+    logger.error('Erro ao adicionar mensagem do bot no Kommo', { error: error.message, leadId });
+    throw error;
+  }
+}
+
+/**
+ * Busca os dados de um lead no Kommo pelo ID.
+ * @param {string} leadId
+ * @returns {Promise<object>} Dados do lead
+ */
+async function buscarLead(leadId) {
+  try {
+    const response = await axios.get(
+      `${config.kommo.baseUrl}/api/v4/leads/${leadId}`,
+      { headers: headers() }
+    );
+    return response.data;
+  } catch (error) {
+    logger.error('Erro ao buscar lead no Kommo', { error: error.message, leadId });
+    throw error;
+  }
+}
+
+module.exports = { criarLead, criarContato, adicionarNota, atualizarEstagio, adicionarMensagemBot, buscarLead };

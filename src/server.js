@@ -5,6 +5,7 @@ const logger = require('./config/logger');
 const instagramWebhook = require('./webhooks/instagramWebhook');
 const landingPageWebhook = require('./webhooks/landingPageWebhook');
 const manychatWebhook = require('./webhooks/manychatWebhook');
+const kommoWebhook = require('./webhooks/kommoWebhook');
 const { sessoesAtivas } = require('./sessions/sessionManager');
 const { iniciarAgendador, ciclosAtivos } = require('./followup/followUpScheduler');
 const { enviarMensagem } = require('./integrations/instagram');
@@ -53,6 +54,7 @@ app.get('/admin/followups', adminAuth, (req, res) => {
 app.use('/webhook/instagram', instagramWebhook);
 app.use('/webhook/manychat', manychatWebhook);
 app.use('/webhook/lead', landingPageWebhook);
+app.use('/webhook/kommo', kommoWebhook);
 
 // ─── 404 / Error handler ─────────────────────────────────────────────────────
 app.use((req, res) => res.status(404).json({ error: 'Rota não encontrada' }));
@@ -76,6 +78,7 @@ app.listen(PORT, () => {
   logger.info('  POST /webhook/manychat/iniciar (primeiro contato ManyChat)');
   logger.info('  POST /webhook/lead            (landing pages / ads)');
   logger.info('  POST /webhook/lead/mensagem   (continuação de conversa)');
+  logger.info('  POST /webhook/kommo           (Kommo CRM — tráfego pago)');
 });
 
 module.exports = app;
