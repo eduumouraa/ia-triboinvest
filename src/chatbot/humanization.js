@@ -32,12 +32,16 @@ function calcularDelay() {
 
 /**
  * Aguarda o delay de humanização (simula tempo de leitura + digitação).
- * Só aplica em produção — em desenvolvimento e simulação, delay é 0.
+ * Skipa em: desenvolvimento, simulação, e canal ManyChat (timeout de 10s).
  */
 async function aguardarDelay() {
-  if (process.env.NODE_ENV !== 'production' && process.env.HUMANIZATION_FORCE !== 'true') {
-    return;
-  }
+  const skipHumanization =
+    process.env.NODE_ENV !== 'production' ||
+    process.env.HUMANIZATION_FORCE === 'false' ||
+    process.env._SKIP_HUMANIZATION === 'true';
+
+  if (skipHumanization) return;
+
   const ms = calcularDelay();
   logger.debug('Humanização: aguardando delay', { segundos: Math.round(ms / 1000) });
   await sleep(ms);

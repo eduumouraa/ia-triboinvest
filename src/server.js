@@ -4,6 +4,7 @@ const config = require('./config');
 const logger = require('./config/logger');
 const instagramWebhook = require('./webhooks/instagramWebhook');
 const landingPageWebhook = require('./webhooks/landingPageWebhook');
+const manychatWebhook = require('./webhooks/manychatWebhook');
 const { sessoesAtivas } = require('./sessions/sessionManager');
 const { iniciarAgendador, ciclosAtivos } = require('./followup/followUpScheduler');
 const { enviarMensagem } = require('./integrations/instagram');
@@ -50,6 +51,7 @@ app.get('/admin/followups', adminAuth, (req, res) => {
 
 // ─── Webhooks ─────────────────────────────────────────────────────────────────
 app.use('/webhook/instagram', instagramWebhook);
+app.use('/webhook/manychat', manychatWebhook);
 app.use('/webhook/lead', landingPageWebhook);
 
 // ─── 404 / Error handler ─────────────────────────────────────────────────────
@@ -70,8 +72,10 @@ app.listen(PORT, () => {
   logger.info('  GET  /admin/followups       (x-admin-token)');
   logger.info('  GET  /webhook/instagram     (verificação Meta)');
   logger.info('  POST /webhook/instagram     (DMs Instagram)');
-  logger.info('  POST /webhook/lead          (landing pages / ads)');
-  logger.info('  POST /webhook/lead/mensagem (continuação de conversa)');
+  logger.info('  POST /webhook/manychat        (DMs via ManyChat)');
+  logger.info('  POST /webhook/manychat/iniciar (primeiro contato ManyChat)');
+  logger.info('  POST /webhook/lead            (landing pages / ads)');
+  logger.info('  POST /webhook/lead/mensagem   (continuação de conversa)');
 });
 
 module.exports = app;
