@@ -1,0 +1,8 @@
+# Configuração de build para Railway (Nixpacks)
+# Garante que as dependências nativas do better-sqlite3 sejam instaladas
+
+[phases.setup]
+aptPkgs = ["libatomic1", "python3", "make", "g++"]
+
+[start]
+cmd = "node src/server.js"
