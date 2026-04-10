@@ -61,8 +61,12 @@ router.post('/', express.json(), async (req, res) => {
       text: texto,
     }));
 
+    const primeiraMensagem = respostas[0] || '';
+
     // ManyChat suporta até 10 mensagens por resposta
+    // Campo "text" no topo facilita o mapeamento via JSONPath simples
     return res.json({
+      text: primeiraMensagem,
       version: 'v2',
       content: { messages: messages.slice(0, 10) },
     });
