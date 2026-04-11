@@ -1,0 +1,378 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<title>Fluxo Completo IA — Tribo Invest</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: Arial, sans-serif; font-size: 13px; color: #111; background: #fff; padding: 36px; max-width: 800px; margin: 0 auto; }
+
+  h1 { font-size: 20px; text-align: center; margin-bottom: 4px; }
+  .subtitle { text-align: center; color: #777; font-size: 11px; margin-bottom: 32px; }
+
+  .step { margin-bottom: 20px; }
+
+  .step-header {
+    padding: 7px 14px;
+    font-weight: bold;
+    font-size: 12px;
+    border-radius: 4px 4px 0 0;
+    letter-spacing: 0.3px;
+  }
+  .step-header.auto   { background: #1a1a2e; color: #fff; }
+  .step-header.fixed  { background: #2d6a4f; color: #fff; }
+  .step-header.ai     { background: #1d4e89; color: #fff; }
+  .step-header.error  { background: #c0392b; color: #fff; }
+  .step-header.end    { background: #555; color: #fff; }
+
+  .badge {
+    display: inline-block;
+    font-size: 10px;
+    padding: 1px 7px;
+    border-radius: 10px;
+    margin-left: 8px;
+    font-weight: normal;
+  }
+  .badge.fixa { background: #a8d5b5; color: #000; }
+  .badge.ia   { background: #aac4e8; color: #000; }
+
+  .msg {
+    border: 1.5px solid #ccc;
+    border-top: none;
+    padding: 12px 16px;
+    white-space: pre-wrap;
+    line-height: 1.75;
+    border-radius: 0 0 4px 4px;
+    background: #fafafa;
+  }
+
+  .invalid {
+    margin-top: 6px;
+    font-size: 11px;
+  }
+  .invalid-label { color: #c0392b; font-weight: bold; font-size: 11px; margin-bottom: 2px; }
+  .invalid-msg {
+    background: #fff5f5;
+    border: 1px solid #f5c6c6;
+    padding: 6px 12px;
+    border-radius: 4px;
+    font-size: 12px;
+  }
+
+  .arrow {
+    text-align: center;
+    color: #aaa;
+    font-size: 18px;
+    margin: 6px 0;
+  }
+
+  .split {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 16px;
+    margin: 8px 0 20px;
+  }
+  .split-box {
+    border-radius: 4px;
+    overflow: hidden;
+    border: 1.5px solid #ddd;
+  }
+  .split-box .split-title {
+    padding: 6px 12px;
+    font-size: 11px;
+    font-weight: bold;
+    text-transform: uppercase;
+    letter-spacing: 0.4px;
+  }
+  .split-box .split-title.a { background: #c0392b; color: #fff; }
+  .split-box .split-title.b { background: #1d4e89; color: #fff; }
+  .split-box .split-body { padding: 10px 12px; font-size: 12px; line-height: 1.6; background: #fafafa; }
+
+  .product-title {
+    margin: 28px 0 12px;
+    padding: 10px 16px;
+    font-size: 15px;
+    font-weight: bold;
+    border-radius: 4px;
+  }
+  .product-title.tribo { background: #1d4e89; color: #fff; }
+  .product-title.org   { background: #c0392b; color: #fff; }
+
+  .flow-row {
+    display: flex;
+    gap: 10px;
+    align-items: flex-start;
+    margin-bottom: 8px;
+  }
+  .flow-label {
+    min-width: 90px;
+    font-size: 11px;
+    font-weight: bold;
+    padding-top: 2px;
+    color: #555;
+    text-transform: uppercase;
+  }
+  .flow-content { flex: 1; }
+
+  .outcome-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr 1fr;
+    gap: 10px;
+    margin: 8px 0 16px;
+  }
+  .outcome {
+    border-radius: 4px;
+    overflow: hidden;
+    border: 1.5px solid #ddd;
+  }
+  .outcome-label {
+    font-size: 10px;
+    font-weight: bold;
+    padding: 4px 10px;
+    text-transform: uppercase;
+    letter-spacing: 0.3px;
+  }
+  .outcome-label.green  { background: #2d6a4f; color: #fff; }
+  .outcome-label.yellow { background: #e8c200; color: #000; }
+  .outcome-label.red    { background: #c0392b; color: #fff; }
+  .outcome-body { padding: 8px 10px; font-size: 11px; line-height: 1.5; background: #fafafa; }
+
+  .special { margin-top: 28px; }
+  .special-title {
+    font-size: 12px;
+    font-weight: bold;
+    color: #555;
+    text-transform: uppercase;
+    letter-spacing: 0.4px;
+    border-bottom: 1px solid #ddd;
+    padding-bottom: 4px;
+    margin-bottom: 10px;
+  }
+  .special-item { margin-bottom: 8px; }
+  .special-situation { font-size: 11px; color: #777; margin-bottom: 2px; }
+  .special-msg {
+    background: #f5f5f5;
+    border: 1px solid #ddd;
+    padding: 6px 12px;
+    border-radius: 4px;
+    font-size: 12px;
+  }
+
+  hr { border: none; border-top: 2px dashed #e0e0e0; margin: 24px 0; }
+
+  @media print {
+    body { padding: 20px; }
+    .product-title { page-break-before: always; }
+    .split { grid-template-columns: 1fr 1fr; }
+    .outcome-grid { grid-template-columns: 1fr 1fr 1fr; }
+  }
+</style>
+</head>
+<body>
+
+<h1>Fluxo Completo — IA Tribo Invest</h1>
+<p class="subtitle">Todas as mensagens e caminhos possíveis · Versão atual do código</p>
+
+<!-- ═══════════════════════════════════════ MENSAGEM INICIAL -->
+
+<div class="step">
+  <div class="step-header auto">MENSAGEM INICIAL <span class="badge fixa">FIXA · enviada automaticamente no 1º contato</span></div>
+  <div class="msg">Olá! Obrigado pelo contato 😊
+
+Qual é o seu objetivo financeiro hoje?
+
+1️⃣ Quero começar a investir
+2️⃣ Quero sair das dívidas
+3️⃣ Quero entender sobre finanças
+
+_(Responda com 1, 2 ou 3)_</div>
+  <div class="invalid">
+    <div class="invalid-label">⚠ SE RESPOSTA INVÁLIDA:</div>
+    <div class="invalid-msg">Responda com <strong>1</strong>, <strong>2</strong> ou <strong>3</strong>. 😊</div>
+  </div>
+</div>
+
+<div class="arrow">↓</div>
+
+<!-- ═══════════════════════════════════════ SITUAÇÃO FINANCEIRA -->
+
+<div class="step">
+  <div class="step-header fixed">SITUAÇÃO FINANCEIRA <span class="badge fixa">FIXA</span></div>
+  <div class="msg">Você tem dívidas em aberto hoje?
+
+1️⃣ Sim, tenho dívidas
+2️⃣ Não tenho dívidas
+
+_(Responda com 1 ou 2)_</div>
+  <div class="invalid">
+    <div class="invalid-label">⚠ SE RESPOSTA INVÁLIDA:</div>
+    <div class="invalid-msg">Responda com <strong>1</strong> (sim) ou <strong>2</strong> (não). 😊</div>
+  </div>
+</div>
+
+<div class="arrow">↓ aqui o caminho se divide</div>
+
+<!-- ═══════════════════════════════════════ SPLIT -->
+
+<div class="split">
+  <div class="split-box">
+    <div class="split-title a">CAMINHO A — Tem dívidas ou escolheu opção 2 no objetivo</div>
+    <div class="split-body">
+      <strong>→ PULA a pergunta de experiência</strong><br><br>
+      Vai direto para:<br><br>
+      <strong>RENDA</strong><br>
+      Qual é a sua renda mensal aproximada?<br><br>
+      1️⃣ Até R$ 2.000<br>
+      2️⃣ De R$ 2.000 a R$ 5.000<br>
+      3️⃣ De R$ 5.000 a R$ 10.000<br>
+      4️⃣ Acima de R$ 10.000<br><br>
+      <em>(Responda com 1, 2, 3 ou 4)</em><br><br>
+      ⚠ Inválido: Responda com <strong>1</strong>, <strong>2</strong>, <strong>3</strong> ou <strong>4</strong>. 😊<br><br>
+      → Roteado para <strong>Organização Financeira</strong>
+    </div>
+  </div>
+  <div class="split-box">
+    <div class="split-title b">CAMINHO B — Não tem dívidas e quer investir ou aprender</div>
+    <div class="split-body">
+      <strong>EXPERIÊNCIA</strong><br>
+      Qual é sua experiência com investimentos?<br><br>
+      1️⃣ Nunca investi — sou iniciante<br>
+      2️⃣ Já investi um pouco, mas tenho dúvidas<br>
+      3️⃣ Já invisto regularmente<br><br>
+      <em>(Responda com 1, 2 ou 3)</em><br><br>
+      ⚠ Inválido: Responda com <strong>1</strong>, <strong>2</strong> ou <strong>3</strong>. 😊<br><br>
+      ↓<br><br>
+      <strong>RENDA</strong><br>
+      Qual é a sua renda mensal aproximada?<br><br>
+      1️⃣ Até R$ 2.000<br>
+      2️⃣ De R$ 2.000 a R$ 5.000<br>
+      3️⃣ De R$ 5.000 a R$ 10.000<br>
+      4️⃣ Acima de R$ 10.000<br><br>
+      → Roteado para <strong>Tribo do Investidor</strong>
+    </div>
+  </div>
+</div>
+
+<hr>
+
+<!-- ═══════════════════════════════════════ TRIBO DO INVESTIDOR -->
+
+<div class="product-title tribo">PRODUTO 1 — TRIBO DO INVESTIDOR</div>
+
+<div class="step">
+  <div class="step-header ai">APRESENTAÇÃO <span class="badge ia">IA · gerada pelo Claude</span></div>
+  <div class="msg">Destaca 2-3 benefícios principais da Tribo do Investidor.
+Não menciona preço ainda.
+Máximo 5 linhas.</div>
+</div>
+
+<div class="arrow">↓ lead responde qualquer coisa</div>
+
+<div class="step">
+  <div class="step-header ai">PROPOSTA <span class="badge ia">IA · gerada pelo Claude</span></div>
+  <div class="msg">Apresenta: 12x R$ 97,00 (R$ 3,23/dia) + garantia de 7 dias.
+
+1️⃣ Quero entrar
+2️⃣ Tenho dúvidas
+3️⃣ Preciso pensar</div>
+</div>
+
+<div class="arrow">↓ lead responde</div>
+
+<div class="outcome-grid">
+  <div class="outcome">
+    <div class="outcome-label green">1 — ACEITA</div>
+    <div class="outcome-body">Lead manda <strong>1</strong> ou "quero / sim / vamos / fechar / comprar"<br><br>→ <strong>FECHAMENTO</strong><br>Claude entrega o link e encerra.</div>
+  </div>
+  <div class="outcome">
+    <div class="outcome-label yellow">2 — TEM DÚVIDA</div>
+    <div class="outcome-body">Lead manda <strong>2</strong> ou "dúvida / não sei / caro / pensar / depois"<br><br>→ <strong>OBJEÇÃO</strong><br>Claude responde curto e empático.<br>Se aceitar → FECHAMENTO.</div>
+  </div>
+  <div class="outcome">
+    <div class="outcome-label red">3 — RECUSA</div>
+    <div class="outcome-body">Lead manda <strong>3</strong> ou "não quero / sem interesse / tchau"<br><br>→ <strong>ENCERRADO</strong></div>
+  </div>
+</div>
+
+<div class="step">
+  <div class="step-header ai">FECHAMENTO <span class="badge ia">IA · gerada pelo Claude</span></div>
+  <div class="msg">Entrega o link direto:
+👉 https://triboinvest.com.br/tribo-do-investidor/
+
+Confirma o próximo passo e encerra.</div>
+</div>
+
+<hr>
+
+<!-- ═══════════════════════════════════════ ORGANIZAÇÃO FINANCEIRA -->
+
+<div class="product-title org">PRODUTO 2 — ORGANIZAÇÃO FINANCEIRA E NEGOCIAÇÃO DE DÍVIDAS</div>
+
+<div class="step">
+  <div class="step-header ai">APRESENTAÇÃO <span class="badge ia">IA · gerada pelo Claude</span></div>
+  <div class="msg">Destaca 2-3 benefícios principais do método.
+Conecta com a dor do lead (dívidas).
+Não menciona preço ainda.
+Máximo 5 linhas.</div>
+</div>
+
+<div class="arrow">↓ lead responde qualquer coisa</div>
+
+<div class="step">
+  <div class="step-header ai">PROPOSTA <span class="badge ia">IA · gerada pelo Claude</span></div>
+  <div class="msg">Apresenta: R$ 97,00 pagamento único + garantia de 7 dias.
+
+1️⃣ Quero garantir meu acesso
+2️⃣ Tenho dúvidas
+3️⃣ Preciso pensar</div>
+</div>
+
+<div class="arrow">↓ lead responde</div>
+
+<div class="outcome-grid">
+  <div class="outcome">
+    <div class="outcome-label green">1 — ACEITA</div>
+    <div class="outcome-body">Lead manda <strong>1</strong> ou "quero / sim / vamos / fechar / comprar"<br><br>→ <strong>FECHAMENTO</strong><br>Claude entrega o link e encerra.</div>
+  </div>
+  <div class="outcome">
+    <div class="outcome-label yellow">2 — TEM DÚVIDA</div>
+    <div class="outcome-body">Lead manda <strong>2</strong> ou "dúvida / não sei / caro / pensar / depois"<br><br>→ <strong>OBJEÇÃO</strong><br>Claude responde curto e empático.<br>Se aceitar → FECHAMENTO.</div>
+  </div>
+  <div class="outcome">
+    <div class="outcome-label red">3 — RECUSA</div>
+    <div class="outcome-body">Lead manda <strong>3</strong> ou "não quero / sem interesse / tchau"<br><br>→ <strong>ENCERRADO</strong></div>
+  </div>
+</div>
+
+<div class="step">
+  <div class="step-header ai">FECHAMENTO <span class="badge ia">IA · gerada pelo Claude</span></div>
+  <div class="msg">Entrega o link direto:
+👉 https://chk.eduzz.com/8WPNOBJN0P
+
+Confirma o próximo passo e encerra.</div>
+</div>
+
+<hr>
+
+<!-- ═══════════════════════════════════════ CASOS ESPECIAIS -->
+
+<div class="special">
+  <div class="special-title">Casos Especiais</div>
+
+  <div class="special-item">
+    <div class="special-situation">Lead manda mensagem depois da conversa já encerrada:</div>
+    <div class="special-msg">Obrigado pelo contato! Em breve um dos nossos especialistas vai entrar em contato. 😊</div>
+  </div>
+
+  <div class="special-item" style="margin-top:10px;">
+    <div class="special-situation">Erro técnico:</div>
+    <div class="special-msg">Ops, tive um pequeno problema aqui! Pode repetir? 😊</div>
+  </div>
+</div>
+
+<p style="text-align:center; color:#aaa; font-size:10px; margin-top:36px;">
+  Fundo escuro = texto fixo no código &nbsp;|&nbsp; Fundo azul escuro = gerado pela IA (Claude) &nbsp;|&nbsp; Versão atual · Tribo Invest
+</p>
+
+</body>
+</html>
