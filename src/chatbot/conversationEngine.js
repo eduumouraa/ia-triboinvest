@@ -25,7 +25,6 @@ const anthropic = new Anthropic({ apiKey: config.anthropic.apiKey });
 
 const ETAPAS_QUALIFICACAO = new Set([
   ETAPAS.BOAS_VINDAS,
-  ETAPAS.OBJETIVO,
   ETAPAS.SITUACAO_FINANCEIRA,
   ETAPAS.EXPERIENCIA,
   ETAPAS.RENDA,
@@ -35,29 +34,16 @@ const ETAPAS_QUALIFICACAO = new Set([
 
 const PERGUNTAS = {
 
-  [ETAPAS.OBJETIVO]: (nome) =>
-`Prazer, ${nome}! 😊
-
-Pra eu te ajudar melhor, me conta: *qual é o seu principal objetivo financeiro agora?*
-
-1️⃣ Quero começar a investir
-2️⃣ Quero sair das dívidas
-3️⃣ Quero entender melhor sobre finanças
-
-_(Responda com 1, 2 ou 3)_`,
-
-  [ETAPAS.SITUACAO_FINANCEIRA]: (nome) =>
-`Entendido, ${nome}!
-
-Você tem dívidas em aberto hoje?
+  [ETAPAS.SITUACAO_FINANCEIRA]: () =>
+`Você tem dívidas em aberto hoje?
 
 1️⃣ Sim, tenho dívidas
 2️⃣ Não tenho dívidas
 
 _(Responda com 1 ou 2)_`,
 
-  [ETAPAS.EXPERIENCIA]: (nome) =>
-`Legal! E qual é sua experiência com investimentos hoje, ${nome}?
+  [ETAPAS.EXPERIENCIA]: () =>
+`Qual é sua experiência com investimentos?
 
 1️⃣ Nunca investi — sou iniciante
 2️⃣ Já investi um pouco, mas tenho dúvidas
@@ -65,10 +51,8 @@ _(Responda com 1 ou 2)_`,
 
 _(Responda com 1, 2 ou 3)_`,
 
-  [ETAPAS.RENDA]: (nome) =>
-`Última pergunta rápida, ${nome}!
-
-Qual é a sua renda mensal aproximada?
+  [ETAPAS.RENDA]: () =>
+`Qual é a sua renda mensal aproximada?
 
 1️⃣ Até R$ 2.000
 2️⃣ De R$ 2.000 a R$ 5.000
@@ -142,14 +126,14 @@ function extrairNumero(msg) {
 
 // ─── MENSAGEM DE OPÇÃO INVÁLIDA ───────────────────────────────────────────────
 
-function respostaOpcaoInvalida(etapa, nome) {
+function respostaOpcaoInvalida(etapa) {
   const mapa = {
-    [ETAPAS.OBJETIVO]: `Por favor, ${nome}, responda com *1*, *2* ou *3*. 😊`,
-    [ETAPAS.SITUACAO_FINANCEIRA]: `Responda com *1* (sim) ou *2* (não), ${nome}. 😊`,
-    [ETAPAS.EXPERIENCIA]: `Responda com *1*, *2* ou *3*, ${nome}. 😊`,
-    [ETAPAS.RENDA]: `Responda com *1*, *2*, *3* ou *4*, ${nome}. 😊`,
+    [ETAPAS.BOAS_VINDAS]: 'Responda com *1*, *2* ou *3*. 😊',
+    [ETAPAS.SITUACAO_FINANCEIRA]: 'Responda com *1* (sim) ou *2* (não). 😊',
+    [ETAPAS.EXPERIENCIA]: 'Responda com *1*, *2* ou *3*. 😊',
+    [ETAPAS.RENDA]: 'Responda com *1*, *2*, *3* ou *4*. 😊',
   };
-  return mapa[etapa] || 'Pode repetir? Não entendi sua resposta. 😊';
+  return mapa[etapa] || 'Pode repetir? Não entendi. 😊';
 }
 
 // ─── PROCESSAMENTO PRINCIPAL ──────────────────────────────────────────────────
@@ -157,7 +141,6 @@ function respostaOpcaoInvalida(etapa, nome) {
 async function processarMensagem(mensagemLead, sessao) {
   const etapaAtual = sessao.etapa || ETAPAS.BOAS_VINDAS;
   const dadosLead = { ...sessao.dadosLead } || {};
-  const nome = dadosLead.nome || 'você';
 
   logger.info('Processando mensagem', {
     leadId: sessao.leadId,
@@ -167,7 +150,7 @@ async function processarMensagem(mensagemLead, sessao) {
 
   // ── Qualificação estruturada (sem IA) ──────────────────────────────────────
   if (ETAPAS_QUALIFICACAO.has(etapaAtual)) {
-    return processarEtapaQualificacao(mensagemLead, sessao, etapaAtual, dadosLead, nome);
+    return processarEtapaQualificacao(mensagemLead, sessao, etapaAtual, dadosLead);
   }
 
   // ── Apresentação, proposta, objeção, fechamento → Claude AI ───────────────
@@ -176,7 +159,7 @@ async function processarMensagem(mensagemLead, sessao) {
 
 // ─── QUALIFICAÇÃO ESTRUTURADA ─────────────────────────────────────────────────
 
-function processarEtapaQualificacao(msg, sessao, etapa, dadosLead, nome) {
+function processarEtapaQualificacao(msg, sessao, etapa, dadosLead) {
   let dadosAtualizados = { ...dadosLead };
   let resposta = '';
   let proximaEt = etapa;
@@ -184,25 +167,16 @@ function processarEtapaQualificacao(msg, sessao, etapa, dadosLead, nome) {
 
   switch (etapa) {
 
-    // BOAS_VINDAS: aguarda nome
+    // BOAS_VINDAS: recebe a escolha de objetivo (1/2/3)
     case ETAPAS.BOAS_VINDAS: {
-      const nomeExtraido = extrairNome(msg);
-      dadosAtualizados.nome = nomeExtraido;
-      proximaEt = ETAPAS.OBJETIVO;
-      resposta = PERGUNTAS[ETAPAS.OBJETIVO](nomeExtraido);
-      break;
-    }
-
-    // OBJETIVO: 1=investir, 2=dívidas, 3=aprender
-    case ETAPAS.OBJETIVO: {
       const objetivo = parsearObjetivo(msg);
       if (!objetivo) {
-        resposta = respostaOpcaoInvalida(etapa, nome);
+        resposta = respostaOpcaoInvalida(etapa);
         break;
       }
       dadosAtualizados.objetivo = objetivo;
       proximaEt = ETAPAS.SITUACAO_FINANCEIRA;
-      resposta = PERGUNTAS[ETAPAS.SITUACAO_FINANCEIRA](nome);
+      resposta = PERGUNTAS[ETAPAS.SITUACAO_FINANCEIRA]();
       break;
     }
 
@@ -210,7 +184,7 @@ function processarEtapaQualificacao(msg, sessao, etapa, dadosLead, nome) {
     case ETAPAS.SITUACAO_FINANCEIRA: {
       const temDividas = parsearSituacaoFinanceira(msg);
       if (temDividas === null) {
-        resposta = respostaOpcaoInvalida(etapa, nome);
+        resposta = respostaOpcaoInvalida(etapa);
         break;
       }
       dadosAtualizados.temDividas = temDividas;
@@ -218,10 +192,10 @@ function processarEtapaQualificacao(msg, sessao, etapa, dadosLead, nome) {
       // Se tem dívidas OU objetivo é sair_dividas → pula experiência, vai direto para renda
       if (temDividas || dadosAtualizados.objetivo === 'sair_dividas') {
         proximaEt = ETAPAS.RENDA;
-        resposta = PERGUNTAS[ETAPAS.RENDA](nome);
+        resposta = PERGUNTAS[ETAPAS.RENDA]();
       } else {
         proximaEt = ETAPAS.EXPERIENCIA;
-        resposta = PERGUNTAS[ETAPAS.EXPERIENCIA](nome);
+        resposta = PERGUNTAS[ETAPAS.EXPERIENCIA]();
       }
       break;
     }
@@ -230,11 +204,11 @@ function processarEtapaQualificacao(msg, sessao, etapa, dadosLead, nome) {
     case ETAPAS.EXPERIENCIA: {
       dadosAtualizados.experiencia = parsearExperiencia(msg);
       proximaEt = ETAPAS.RENDA;
-      resposta = PERGUNTAS[ETAPAS.RENDA](nome);
+      resposta = PERGUNTAS[ETAPAS.RENDA]();
       break;
     }
 
-    // RENDA: rota para produto + gera apresentação (via Claude)
+    // RENDA: rota para produto + dispara apresentação via Claude
     case ETAPAS.RENDA: {
       dadosAtualizados.renda = parsearRenda(msg);
       const produtoRotado = rotearProduto(dadosAtualizados);
@@ -246,11 +220,9 @@ function processarEtapaQualificacao(msg, sessao, etapa, dadosLead, nome) {
         proximaEt = ETAPAS.APRESENTACAO_ORG_FIN;
       } else {
         proximaEt = ETAPAS.ENCERRADO;
-        resposta = `Obrigada, ${nome}! Vou pedir que um dos nossos especialistas entre em contato com você pra entender melhor como podemos ajudar. 😊`;
+        resposta = 'Obrigado! Em breve um dos nossos especialistas vai entrar em contato. 😊';
       }
 
-      // Para apresentação, Claude vai gerar a resposta na próxima chamada
-      // Aqui apenas atualizamos o estado — Claude roda abaixo
       if (proximaEt !== ETAPAS.ENCERRADO) {
         const sessaoTransicao = {
           ...sessao,
@@ -300,7 +272,6 @@ Link: https://chk.eduzz.com/8WPNOBJN0P
 Entrega: método de organização, técnicas de negociação de dívidas (descontos de 40-70%), base para investir.`;
 
 async function processarComClaude(mensagemLead, sessao, etapaAtual, dadosLead) {
-  const nome = dadosLead.nome || 'você';
   const historico = sessao.historico || [];
   const eApresentacao = mensagemLead === '[INICIAR_APRESENTACAO]';
 
@@ -309,7 +280,6 @@ async function processarComClaude(mensagemLead, sessao, etapaAtual, dadosLead) {
 ${CONTEXTO_PRODUTOS}
 
 DADOS DO LEAD:
-- Nome: ${dadosLead.nome || 'não informado'}
 - Objetivo: ${dadosLead.objetivo || 'não informado'}
 - Tem dívidas: ${dadosLead.temDividas ?? 'não informado'}
 - Experiência: ${dadosLead.experiencia || 'não informado'}
@@ -318,18 +288,19 @@ DADOS DO LEAD:
 - Etapa atual: ${etapaAtual}
 
 REGRAS:
-❌ NUNCA dar o link antes da etapa de FECHAMENTO
+❌ NUNCA dar o link antes do FECHAMENTO
 ❌ NUNCA inventar números ou promoções
-✅ Use o nome ${nome} naturalmente
-✅ Na APRESENTACAO: construa valor, faça o lead querer. NÃO mencione preço ainda.
-✅ Na PROPOSTA: apresente o preço com ancoragem. Ofereça 3 opções numeradas: 1=quero garantir minha vaga, 2=tenho dúvidas, 3=preciso pensar
-✅ Na OBJECAO: trate com empatia antes de rebater
-✅ No FECHAMENTO: entregue o link direto, transmita segurança
+❌ NÃO use o nome da pessoa nas mensagens
+✅ Seja direto e objetivo — máximo 5 linhas por mensagem
+✅ Na APRESENTACAO: destaque 2-3 benefícios reais. NÃO mencione preço ainda.
+✅ Na PROPOSTA: apresente o preço com ancoragem. Ofereça: 1=quero entrar, 2=tenho dúvidas, 3=preciso pensar
+✅ Na OBJECAO: resposta curta, empática, rebate e redireciona
+✅ No FECHAMENTO: entregue o link direto e confirme o próximo passo
 
-Responda APENAS com o texto da mensagem para o lead, sem JSON, sem explicações.`;
+Responda APENAS com o texto da mensagem. Sem JSON, sem explicações.`;
 
   const mensagemParaClaude = eApresentacao
-    ? `Inicie a apresentação do produto indicado (${sessao.produtoRecomendado}) para ${nome}. Construa valor sem mencionar preço.`
+    ? `Inicie a apresentação do produto (${sessao.produtoRecomendado}). Destaque 2-3 benefícios principais. Seja breve e direto. NÃO mencione preço.`
     : mensagemLead;
 
   try {
