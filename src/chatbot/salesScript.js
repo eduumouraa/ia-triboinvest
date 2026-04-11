@@ -109,7 +109,7 @@ const MENSAGENS = {
   // ── Entrada ──────────────────────────────────────────────────────────────────
 
   [ETAPAS.BOAS_VINDAS]: () =>
-`Oi! Sou a assistente da *Tribo Invest* 👋
+`Olá! Obrigado pelo contato 😊
 
 Qual é o seu objetivo financeiro hoje?
 
