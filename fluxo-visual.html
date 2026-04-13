@@ -1,0 +1,182 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<title>Fluxo IA — Tribo Invest</title>
+<script src="https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js"></script>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    font-family: Arial, sans-serif;
+    background: #f9f9f9;
+    padding: 30px 20px;
+  }
+  h1 {
+    text-align: center;
+    font-size: 18px;
+    color: #222;
+    margin-bottom: 4px;
+    letter-spacing: 0.5px;
+  }
+  .subtitle {
+    text-align: center;
+    font-size: 12px;
+    color: #888;
+    margin-bottom: 30px;
+  }
+  .mermaid {
+    display: flex;
+    justify-content: center;
+  }
+  @media print {
+    body { padding: 10px; background: #fff; }
+  }
+</style>
+</head>
+<body>
+
+<h1>Fluxo Completo — Agente IA Tribo Invest</h1>
+<p class="subtitle">Todas as etapas, respostas e caminhos possíveis</p>
+
+<div class="mermaid">
+flowchart TD
+    START(["🤖 Lead entra em contato"]):::start
+
+    START --> BV["📩 BOAS-VINDAS automática
+    ─────────────────────────
+    Olá! Obrigado pelo contato 😊
+    Qual é o seu objetivo financeiro hoje?
+    1️⃣ Quero começar a investir
+    2️⃣ Quero sair das dívidas
+    3️⃣ Quero entender sobre finanças"]:::msg
+
+    BV --> OBJ{"OBJETIVO\n1️⃣ 2️⃣ 3️⃣"}:::decision
+
+    OBJ -->|"1 — Investir"| DIV{"TEM DÍVIDAS?\n1️⃣ Sim   2️⃣ Não"}:::decision
+    OBJ -->|"2 — Sair das dívidas"| DIV
+    OBJ -->|"3 — Aprender"| DIV
+
+    DIV -->|"1 — Sim, tenho dívidas"| RENDA_A["RENDA
+    ─────────────────
+    1️⃣ Até R$ 2.000
+    2️⃣ R$ 2k a R$ 5k
+    3️⃣ R$ 5k a R$ 10k
+    4️⃣ Acima de R$ 10k"]:::msg
+
+    DIV -->|"2 — Não tenho dívidas"| EXP["EXPERIÊNCIA
+    ─────────────────────
+    1️⃣ Nunca investi
+    2️⃣ Já investi um pouco
+    3️⃣ Já invisto regularmente"]:::msg
+
+    EXP --> RENDA_B["RENDA
+    ─────────────────
+    1️⃣ Até R$ 2.000
+    2️⃣ R$ 2k a R$ 5k
+    3️⃣ R$ 5k a R$ 10k
+    4️⃣ Acima de R$ 10k"]:::msg
+
+    RENDA_A -->|"objetivo = dívidas\nou tem dívidas"| ORGFIN(["💳 ORGANIZAÇÃO FINANCEIRA"]):::prodA
+    RENDA_B -->|"objetivo = investir\nou aprender"| TRIBO(["📈 TRIBO DO INVESTIDOR"]):::prodB
+
+    ORGFIN --> APRES_A["APRESENTAÇÃO
+    ─────────────────
+    IA apresenta o método:
+    organização, negociação
+    de dívidas, reserva,
+    base para investir"]:::ai
+
+    APRES_A --> PROP_A["PROPOSTA
+    ─────────────────────────────
+    💰 R$ 97 pagamento único
+    🛡️ Garantia 7 dias
+    ─────────────────────────────
+    1️⃣ Quero garantir meu acesso
+    2️⃣ Tenho uma dúvida
+    3️⃣ Preciso pensar"]:::msg
+
+    PROP_A -->|"1 — Aceita"| FECH_A["✅ FECHAMENTO
+    ────────────────────
+    IA entrega o link:
+    chk.eduzz.com/..."]:::close
+
+    PROP_A -->|"2 — Dúvida"| OBJ_A["🤔 OBJEÇÃO
+    ────────────────────
+    IA trata a dúvida
+    com empatia"]:::obj
+
+    PROP_A -->|"3 — Recusa"| END_A(["❌ ENCERRADO"]):::ended
+
+    OBJ_A -->|"aceita depois"| FECH_A
+
+    TRIBO --> APRES_B["APRESENTAÇÃO
+    ─────────────────
+    IA apresenta a Tribo:
+    mentorias ao vivo,
+    carteiras, comunidade,
+    análises exclusivas"]:::ai
+
+    APRES_B --> PROP_B["PROPOSTA
+    ─────────────────────────────
+    💰 12x R$ 97 = R$ 3,23/dia
+    🛡️ Garantia 7 dias
+    ─────────────────────────────
+    1️⃣ Quero entrar
+    2️⃣ Tenho uma dúvida
+    3️⃣ Preciso pensar"]:::msg
+
+    PROP_B -->|"1 — Aceita"| FECH_B["✅ FECHAMENTO
+    ────────────────────
+    IA entrega o link:
+    triboinvest.com.br/..."]:::close
+
+    PROP_B -->|"2 — Dúvida"| OBJ_B["🤔 OBJEÇÃO
+    ────────────────────
+    IA trata a dúvida
+    com empatia"]:::obj
+
+    PROP_B -->|"3 — Recusa"| END_B(["❌ ENCERRADO"]):::ended
+
+    OBJ_B -->|"aceita depois"| FECH_B
+
+    FECH_A --> CRM(["🏆 Lead registrado\nno Kommo CRM"]):::pos
+    FECH_B --> CRM
+
+    END_A --> FU(["⏰ Follow-up automático\n14 dias"]):::pos
+    END_B --> FU
+
+    FECH_A --> HOT{"🔥 Lead\nquente?"}:::decision
+    FECH_B --> HOT
+    HOT -->|"Sim"| EDUARDO(["📲 Notifica Eduardo\nno WhatsApp"]):::pos
+
+classDef start    fill:#1a1a2e,stroke:#e8c200,color:#e8c200,font-weight:bold
+classDef msg      fill:#fff,stroke:#bbb,color:#222,text-align:left
+classDef decision fill:#fff3cd,stroke:#e8c200,color:#333,font-weight:bold
+classDef prodA    fill:#c0392b,stroke:#922b21,color:#fff,font-weight:bold
+classDef prodB    fill:#1d4e89,stroke:#154360,color:#fff,font-weight:bold
+classDef ai       fill:#eaf4fb,stroke:#85c1e9,color:#1a5276
+classDef close    fill:#d5f5e3,stroke:#2ecc71,color:#1e8449,font-weight:bold
+classDef obj      fill:#fef9e7,stroke:#f39c12,color:#7d6608
+classDef ended    fill:#f2f3f4,stroke:#aaa,color:#777
+classDef pos      fill:#f5eef8,stroke:#9b59b6,color:#6c3483,font-weight:bold
+</div>
+
+<script>
+  mermaid.initialize({
+    startOnLoad: true,
+    theme: 'default',
+    flowchart: {
+      curve: 'basis',
+      padding: 20,
+      nodeSpacing: 50,
+      rankSpacing: 60,
+    },
+    themeVariables: {
+      fontSize: '13px',
+      fontFamily: 'Arial',
+    }
+  });
+</script>
+
+</body>
+</html>
