@@ -44,13 +44,14 @@ const MENSAGENS = {
   [ETAPAS.BOAS_VINDAS]: () =>
 `Olá. Seja bem-vindo à Tribo Invest!
 
-Me conta uma coisa:
+E aí! Tudo certo?
 
-1️⃣ Quero aprender a investir do zero
-2️⃣ Já invisto e quero mais consistência e direção
-3️⃣ Quero entender melhor como funciona o acompanhamento
+Deixa eu te contar rapidinho: a gente aqui da Tribo Invest ajuda pessoas como você a entender melhor como funciona o mundo dos investimentos, de forma prática e com acompanhamento de verdade.
 
-_(Responda com 1, 2 ou 3)_`,
+Você já investe em algo ou está começando do zero?
+
+1 - Já invisto em algo
+2 - Estou começando do zero`,
 
   [ETAPAS.FECHAMENTO]: () => {
     const link = process.env.LINK_PLANO_EUROPA || 'https://pay.hotmart.com/Y105795773S?off=0f638afj&bid=1780536748790';
