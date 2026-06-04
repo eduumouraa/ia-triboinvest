@@ -36,7 +36,7 @@ module.exports = {
     planoEuropa: {
       nome: 'Plano Europa',
       descricao: 'Acompanhamento completo de investimentos da Tribo Invest',
-      preco: process.env.PRECO_PLANO_EUROPA || '[PREÇO — configure no .env]',
+      preco: process.env.PRECO_PLANO_EUROPA || 'R$ 97,00/mês',
       garantia: process.env.GARANTIA_PLANO_EUROPA || '7 dias com devolução integral',
       link: process.env.LINK_PLANO_EUROPA || 'https://pay.hotmart.com/Y105795773S?off=0f638afj&bid=1780536748790',
     },
