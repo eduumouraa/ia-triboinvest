@@ -75,8 +75,26 @@ async function processarMensagem(mensagemLead, sessao) {
     dadosLead.escolhaInicial = escolha;
   }
 
-  // Aceitação na PROPOSTA ou OBJECAO → fechamento fixo (salva chamada à API)
-  // Só considera "1" como aceitação se estiver em etapa de proposta/objeção
+  // "2" na PROPOSTA → encaminha para especialista humano
+  const querDuvida = /^\s*2\s*$/.test(mensagemLead);
+  if (querDuvida && etapaAtual === ETAPAS.PROPOSTA) {
+    const resposta = 'Sem problema! Um dos nossos especialistas vai entrar em contato com você em breve para tirar todas as suas dúvidas. 🙏';
+    const sessaoAtualizada = {
+      ...sessao,
+      etapa: ETAPAS.ENCERRADO,
+      dadosLead,
+      produtoRecomendado: PRODUTOS.PLANO_EUROPA,
+      historico: [...(sessao.historico || []),
+        { role: 'user', content: mensagemLead },
+        { role: 'assistant', content: resposta },
+      ].slice(-20),
+      encerrada: true,
+      ultimaInteracao: new Date().toISOString(),
+    };
+    return { resposta, sessaoAtualizada };
+  }
+
+  // "1" na PROPOSTA ou OBJECAO → fechamento fixo com link
   const aceitouCompra =
     /^\s*1\s*$/.test(mensagemLead) ||
     /(quero entrar|fechar|garantir|comprar|aceito|topo)/i.test(mensagemLead);
