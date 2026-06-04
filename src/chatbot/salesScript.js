@@ -42,28 +42,23 @@ function proximaEtapa(etapaAtual) {
 const MENSAGENS = {
 
   [ETAPAS.BOAS_VINDAS]: () =>
-`Olá. Seja bem-vindo à Tribo Invest!
+`Oi! Vi que você demonstrou interesse na Masterclass de hoje da Tribo Invest.
 
-E aí! Tudo certo?
+Antes de qualquer coisa, me conta:
 
-Deixa eu te contar rapidinho: a gente aqui da Tribo Invest ajuda pessoas como você a entender melhor como funciona o mundo dos investimentos, de forma prática e com acompanhamento de verdade.
+1️⃣ Quero aprender a investir do zero
+2️⃣ Já invisto, mas sinto falta de direção
 
-Você já investe em algo ou está começando do zero?
-
-1 - Já invisto em algo
-2 - Estou começando do zero`,
+Qual das duas opções mais te representa hoje?`,
 
   [ETAPAS.FECHAMENTO]: () => {
     const link = process.env.LINK_PLANO_EUROPA || 'https://pay.hotmart.com/Y105795773S?off=0f638afj&bid=1780536748790';
-    return `Perfeito 🙏
+    return `Que ótimo! Acredito que o Plano Europa vai agregar muito no seu processo. 🙏
 
-Acredito que o acompanhamento pode agregar muito no seu processo.
+🌎 Segue o link da oferta:
+${link}
 
-Vou te passar agora as informações para você garantir sua entrada.
-
-👉 *${link}*
-
-Qualquer dúvida sobre o pagamento ou acesso, pode me chamar aqui. Estou por aqui. 💪`;
+Faz o pagamento e me manda o comprovante por aqui.`;
   },
 
 };
