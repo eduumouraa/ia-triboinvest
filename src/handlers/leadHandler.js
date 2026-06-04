@@ -112,7 +112,7 @@ async function executarAcoesPosMensagem(sessaoAnterior, sessaoAtualizada, platfo
 function deveEnviarParaCRM(sessaoAnterior, sessaoAtualizada) {
   if (sessaoAtualizada.kommoLeadId) return false;
 
-  const etapasQueEnviam = [ETAPAS.PROPOSTA_TRIBO, ETAPAS.PROPOSTA_ORG_FIN, ETAPAS.FECHAMENTO_TRIBO, ETAPAS.FECHAMENTO_ORG_FIN, ETAPAS.ENCERRADO];
+  const etapasQueEnviam = [ETAPAS.PROPOSTA, ETAPAS.OBJECAO, ETAPAS.FECHAMENTO, ETAPAS.ENCERRADO];
   return (
     etapasQueEnviam.includes(sessaoAtualizada.etapa) &&
     !etapasQueEnviam.includes(sessaoAnterior.etapa)

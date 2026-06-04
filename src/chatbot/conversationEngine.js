@@ -1,139 +1,36 @@
 /**
  * MOTOR DE CONVERSA — TRIBO INVEST
  *
- * Fluxo híbrido:
- * - Qualificação (boas-vindas → renda): perguntas fixas com opções numeradas (sem IA)
- * - Apresentação / Proposta / Objeção / Fechamento: Claude AI (persuasão real)
- *
- * Vantagens:
- * ✅ Qualificação instantânea (sem espera de IA)
- * ✅ Apresentação persuasiva (Claude só onde importa)
- * ✅ Muito mais barato — 70% menos chamadas à API
- * ✅ Conversa previsível e testável
+ * Fluxo:
+ * - BOAS_VINDAS: mensagem fixa enviada automaticamente (ver leadHandler.js)
+ * - Tudo o mais: Claude AI segue o script do Plano Europa
+ * - Aceitação na PROPOSTA ou OBJEÇÃO: mensagem fixa de FECHAMENTO (sem IA)
  */
 
 const Anthropic = require('@anthropic-ai/sdk');
 const config = require('../config');
 const logger = require('../config/logger');
-const { ETAPAS, PRODUTOS, MENSAGENS, proximaEtapa, rotearProduto } = require('./salesScript');
+const { ETAPAS, PRODUTOS, MENSAGENS } = require('./salesScript');
 const { classificarTemperatura, TEMPERATURA } = require('./leadTemperature');
 const { classificarPerfil, PERFIL } = require('./leadProfiles');
 
 const anthropic = new Anthropic({ apiKey: config.anthropic.apiKey });
 
-// ─── ETAPAS DE QUALIFICAÇÃO (sem IA) ─────────────────────────────────────────
+// ─── CONTEXTO DO PRODUTO ──────────────────────────────────────────────────────
 
-const ETAPAS_QUALIFICACAO = new Set([
-  ETAPAS.BOAS_VINDAS,
-  ETAPAS.SITUACAO_FINANCEIRA,
-  ETAPAS.EXPERIENCIA,
-  ETAPAS.RENDA,
-]);
-
-// ─── PERGUNTAS FIXAS ──────────────────────────────────────────────────────────
-
-const PERGUNTAS = {
-
-  [ETAPAS.SITUACAO_FINANCEIRA]: () =>
-`Você tem dívidas em aberto hoje?
-
-1️⃣ Sim, tenho dívidas
-2️⃣ Não tenho dívidas
-
-_(Responda com 1 ou 2)_`,
-
-  [ETAPAS.EXPERIENCIA]: () =>
-`Qual é sua experiência com investimentos?
-
-1️⃣ Nunca investi — sou iniciante
-2️⃣ Já investi um pouco, mas tenho dúvidas
-3️⃣ Já invisto regularmente
-
-_(Responda com 1, 2 ou 3)_`,
-
-  [ETAPAS.RENDA]: () =>
-`Qual é a sua renda mensal aproximada?
-
-1️⃣ Até R$ 2.000
-2️⃣ De R$ 2.000 a R$ 5.000
-3️⃣ De R$ 5.000 a R$ 10.000
-4️⃣ Acima de R$ 10.000
-
-_(Responda com 1, 2, 3 ou 4)_`,
-};
-
-// ─── PARSERS DE RESPOSTA ──────────────────────────────────────────────────────
-
-function parsearObjetivo(msg) {
-  const n = extrairNumero(msg);
-  if (n === 1) return 'investir';
-  if (n === 2) return 'sair_dividas';
-  if (n === 3) return 'aprender';
-  // Texto livre
-  const m = msg.toLowerCase();
-  if (m.includes('divida') || m.includes('dívida')) return 'sair_dividas';
-  if (m.includes('invest')) return 'investir';
-  if (m.includes('aprend') || m.includes('entend')) return 'aprender';
-  return null;
-}
-
-function parsearSituacaoFinanceira(msg) {
-  const n = extrairNumero(msg);
-  if (n === 1) return true;
-  if (n === 2) return false;
-  const m = msg.toLowerCase();
-  if (m.includes('sim') || m.includes('tenho') || m.includes('s')) return true;
-  if (m.includes('não') || m.includes('nao') || m.includes('n')) return false;
-  return null;
-}
-
-function parsearExperiencia(msg) {
-  const n = extrairNumero(msg);
-  if (n === 1) return 'iniciante';
-  if (n === 2) return 'alguma';
-  if (n === 3) return 'experiente';
-  const m = msg.toLowerCase();
-  if (m.includes('nunca') || m.includes('inician')) return 'iniciante';
-  if (m.includes('regular') || m.includes('sempre')) return 'experiente';
-  return 'alguma';
-}
-
-function parsearRenda(msg) {
-  const n = extrairNumero(msg);
-  if (n === 1) return 'ate_2k';
-  if (n === 2) return '2k_5k';
-  if (n === 3) return '5k_10k';
-  if (n === 4) return 'acima_10k';
-  // Texto livre
-  const m = msg.toLowerCase().replace(/\./g, '').replace(/,/g, '');
-  if (m.includes('10') || m.includes('dez')) return 'acima_10k';
-  if (m.includes('5') || m.includes('cinco')) return '5k_10k';
-  if (m.includes('2') || m.includes('dois')) return '2k_5k';
-  return 'ate_2k';
-}
-
-function extrairNome(msg) {
-  const limpo = msg.trim().replace(/[!.,?]/g, '');
-  const partes = limpo.split(/\s+/);
-  // Pega só o primeiro nome (ou dois primeiros se for composto)
-  return partes.slice(0, 2).map(p => p.charAt(0).toUpperCase() + p.slice(1).toLowerCase()).join(' ');
-}
-
-function extrairNumero(msg) {
-  const match = msg.trim().match(/^[^0-9]*([1-4])[^0-9]*$/);
-  return match ? parseInt(match[1]) : null;
-}
-
-// ─── MENSAGEM DE OPÇÃO INVÁLIDA ───────────────────────────────────────────────
-
-function respostaOpcaoInvalida(etapa) {
-  const mapa = {
-    [ETAPAS.BOAS_VINDAS]: 'Responda com *1*, *2* ou *3*. 😊',
-    [ETAPAS.SITUACAO_FINANCEIRA]: 'Responda com *1* (sim) ou *2* (não). 😊',
-    [ETAPAS.EXPERIENCIA]: 'Responda com *1*, *2* ou *3*. 😊',
-    [ETAPAS.RENDA]: 'Responda com *1*, *2*, *3* ou *4*. 😊',
-  };
-  return mapa[etapa] || 'Pode repetir? Não entendi. 😊';
+function contextoPlanoEuropa() {
+  const preco = process.env.PRECO_PLANO_EUROPA || '[PREÇO — configure no .env]';
+  const garantia = process.env.GARANTIA_PLANO_EUROPA || '7 dias';
+  return `PRODUTO — PLANO EUROPA (Tribo Invest)
+Acompanhamento completo de investimentos com:
+• Aulas gravadas
+• Aulas ao vivo semanais
+• Grupo de dúvidas
+• Suporte para dúvidas sobre investimentos e carteiras dos alunos
+• Carteiras montadas na prática, com atualização mensal
+• Direcionamento para investir com mais clareza e segurança
+Preço: ${preco}
+Garantia: ${garantia}`;
 }
 
 // ─── PROCESSAMENTO PRINCIPAL ──────────────────────────────────────────────────
@@ -148,160 +45,109 @@ async function processarMensagem(mensagemLead, sessao) {
     msg: mensagemLead.substring(0, 40),
   });
 
-  // ── Qualificação estruturada (sem IA) ──────────────────────────────────────
-  if (ETAPAS_QUALIFICACAO.has(etapaAtual)) {
-    return processarEtapaQualificacao(mensagemLead, sessao, etapaAtual, dadosLead);
+  // Aceitação na PROPOSTA ou OBJECAO → fechamento fixo (salva chamada à API)
+  const aceitouCompra =
+    /^\s*1\s*$/.test(mensagemLead) ||
+    /(quero|sim|vamos|bora|fechar|garantir|comprar|aceito|topo|entrar|quero entrar)/i.test(mensagemLead);
+
+  if (aceitouCompra && (etapaAtual === ETAPAS.PROPOSTA || etapaAtual === ETAPAS.OBJECAO)) {
+    const resposta = MENSAGENS[ETAPAS.FECHAMENTO]();
+    const historicoAtualizado = [
+      ...(sessao.historico || []),
+      { role: 'user', content: mensagemLead },
+      { role: 'assistant', content: resposta },
+    ].slice(-20);
+
+    const sessaoAtualizada = {
+      ...sessao,
+      etapa: ETAPAS.ENCERRADO,
+      dadosLead,
+      produtoRecomendado: PRODUTOS.PLANO_EUROPA,
+      historico: historicoAtualizado,
+      converteu: true,
+      encerrada: true,
+      ultimaInteracao: new Date().toISOString(),
+    };
+    return { resposta, sessaoAtualizada };
   }
 
-  // ── Apresentação, proposta, objeção, fechamento → Claude AI ───────────────
   return processarComClaude(mensagemLead, sessao, etapaAtual, dadosLead);
 }
 
-// ─── QUALIFICAÇÃO ESTRUTURADA ─────────────────────────────────────────────────
-
-function processarEtapaQualificacao(msg, sessao, etapa, dadosLead) {
-  let dadosAtualizados = { ...dadosLead };
-  let resposta = '';
-  let proximaEt = etapa;
-  let produto = sessao.produtoRecomendado;
-
-  switch (etapa) {
-
-    // BOAS_VINDAS: recebe a escolha de objetivo (1/2/3)
-    case ETAPAS.BOAS_VINDAS: {
-      const objetivo = parsearObjetivo(msg);
-      if (!objetivo) {
-        resposta = respostaOpcaoInvalida(etapa);
-        break;
-      }
-      dadosAtualizados.objetivo = objetivo;
-      proximaEt = ETAPAS.SITUACAO_FINANCEIRA;
-      resposta = PERGUNTAS[ETAPAS.SITUACAO_FINANCEIRA]();
-      break;
-    }
-
-    // SITUACAO_FINANCEIRA: tem dívidas?
-    case ETAPAS.SITUACAO_FINANCEIRA: {
-      const temDividas = parsearSituacaoFinanceira(msg);
-      if (temDividas === null) {
-        resposta = respostaOpcaoInvalida(etapa);
-        break;
-      }
-      dadosAtualizados.temDividas = temDividas;
-
-      // Se tem dívidas OU objetivo é sair_dividas → pula experiência, vai direto para renda
-      if (temDividas || dadosAtualizados.objetivo === 'sair_dividas') {
-        proximaEt = ETAPAS.RENDA;
-        resposta = PERGUNTAS[ETAPAS.RENDA]();
-      } else {
-        proximaEt = ETAPAS.EXPERIENCIA;
-        resposta = PERGUNTAS[ETAPAS.EXPERIENCIA]();
-      }
-      break;
-    }
-
-    // EXPERIENCIA: nível de investimento
-    case ETAPAS.EXPERIENCIA: {
-      dadosAtualizados.experiencia = parsearExperiencia(msg);
-      proximaEt = ETAPAS.RENDA;
-      resposta = PERGUNTAS[ETAPAS.RENDA]();
-      break;
-    }
-
-    // RENDA: rota para produto + dispara apresentação via Claude
-    case ETAPAS.RENDA: {
-      dadosAtualizados.renda = parsearRenda(msg);
-      const produtoRotado = rotearProduto(dadosAtualizados);
-      produto = produtoRotado;
-
-      if (produtoRotado === PRODUTOS.TRIBO) {
-        proximaEt = ETAPAS.APRESENTACAO_TRIBO;
-      } else if (produtoRotado === PRODUTOS.ORG_FIN) {
-        proximaEt = ETAPAS.APRESENTACAO_ORG_FIN;
-      } else {
-        proximaEt = ETAPAS.ENCERRADO;
-        resposta = 'Obrigado! Em breve um dos nossos especialistas vai entrar em contato. 😊';
-      }
-
-      if (proximaEt !== ETAPAS.ENCERRADO) {
-        const sessaoTransicao = {
-          ...sessao,
-          etapa: proximaEt,
-          dadosLead: dadosAtualizados,
-          produtoRecomendado: produto,
-        };
-        return processarComClaude(`[INICIAR_APRESENTACAO]`, sessaoTransicao, proximaEt, dadosAtualizados);
-      }
-      break;
-    }
-  }
-
-  // Atualiza sessão
-  const { perfil, objetivoEmocional } = classificarPerfil(dadosAtualizados, sessao.historico || []);
-  const { temperatura } = classificarTemperatura(dadosAtualizados, sessao.historico || [], sessao.pontuacaoTemperatura || 0);
-
-  const sessaoAtualizada = {
-    ...sessao,
-    etapa: proximaEt,
-    dadosLead: dadosAtualizados,
-    produtoRecomendado: produto || sessao.produtoRecomendado,
-    perfil: sessao.perfil || perfil,
-    objetivoEmocional: sessao.objetivoEmocional || objetivoEmocional,
-    temperatura: resolverTemperatura(sessao.temperatura, temperatura),
-    historico: sessao.historico || [],
-    ultimaInteracao: new Date().toISOString(),
-    encerrada: proximaEt === ETAPAS.ENCERRADO,
-  };
-
-  return { resposta, sessaoAtualizada };
-}
-
-// ─── CLAUDE AI — APRESENTAÇÃO / PROPOSTA / OBJEÇÃO / FECHAMENTO ───────────────
-
-const CONTEXTO_PRODUTOS = `
-PRODUTO 1 — TRIBO DO INVESTIDOR
-Comunidade ativa de investidores liderada pelo Lucas.
-Preço: 12x R$97 (R$3,23/dia). Garantia: 7 dias.
-Link: https://triboinvest.com.br/tribo-do-investidor/
-Entrega: mentorias ao vivo semanais, carteiras recomendadas, análises exclusivas, comunidade.
-
-PRODUTO 2 — ORGANIZAÇÃO FINANCEIRA
-Método para organizar finanças e sair das dívidas.
-Preço: R$97 pagamento único. Garantia: 7 dias.
-Link: https://chk.eduzz.com/8WPNOBJN0P
-Entrega: método de organização, técnicas de negociação de dívidas (descontos de 40-70%), base para investir.`;
+// ─── CLAUDE AI ────────────────────────────────────────────────────────────────
 
 async function processarComClaude(mensagemLead, sessao, etapaAtual, dadosLead) {
   const historico = sessao.historico || [];
-  const eApresentacao = mensagemLead === '[INICIAR_APRESENTACAO]';
 
-  const systemPrompt = `Você é a assistente comercial da Tribo Invest.
+  const systemPrompt = `Você é Edu, do time de vendas da Tribo Invest. Atenda de forma calorosa, natural e direta — como um humano faria, sem ser robótico.
 
-${CONTEXTO_PRODUTOS}
+${contextoPlanoEuropa()}
 
 DADOS DO LEAD:
-- Objetivo: ${dadosLead.objetivo || 'não informado'}
-- Tem dívidas: ${dadosLead.temDividas ?? 'não informado'}
-- Experiência: ${dadosLead.experiencia || 'não informado'}
-- Renda: ${dadosLead.renda || 'não informado'}
-- Produto indicado: ${sessao.produtoRecomendado || 'não determinado'}
+- Nome: ${dadosLead.nome || 'não informado'}
+- Experiência identificada: ${dadosLead.experiencia || 'não identificada'}
 - Etapa atual: ${etapaAtual}
 
-REGRAS:
-❌ NUNCA dar o link antes do FECHAMENTO
-❌ NUNCA inventar números ou promoções
-❌ NÃO use o nome da pessoa nas mensagens
-✅ Seja direto e objetivo — máximo 5 linhas por mensagem
-✅ Na APRESENTACAO: destaque 2-3 benefícios reais. NÃO mencione preço ainda.
-✅ Na PROPOSTA: apresente o preço com ancoragem. Ofereça: 1=quero entrar, 2=tenho dúvidas, 3=preciso pensar
-✅ Na OBJECAO: resposta curta, empática, rebate e redireciona
-✅ No FECHAMENTO: entregue o link direto e confirme o próximo passo
+─── SCRIPT DE ATENDIMENTO ───
+
+QUANDO O LEAD RESPONDE "QUERO COMEÇAR DO ZERO" (ou variações):
+  "Perfeito. Então o acompanhamento pode fazer muito sentido pra você.
+
+  A proposta é justamente ajudar quem ainda não sabe por onde começar, com aulas gravadas, aulas ao vivo semanais, grupo de dúvidas, suporte para dúvidas sobre carteira e carteiras montadas na prática para o aluno entender melhor como funciona o mercado e como aplicar com mais clareza.
+
+  Hoje, o que mais te trava: medo de errar, falta de conhecimento, ou falta de acompanhamento?"
+
+QUANDO O LEAD RESPONDE "JÁ INVISTO" (ou variações):
+  "Entendi. Nesse caso, o acompanhamento ajuda muito porque não fica só na teoria.
+
+  A gente trabalha com aulas ao vivo, carteiras montadas na prática, atualização mensal dessas carteiras e suporte para tirar dúvidas relacionadas aos investimentos e às carteiras dos alunos.
+
+  A ideia é justamente trazer mais clareza e direção para quem já investe, mas sente falta de acompanhamento e visão estratégica.
+
+  Hoje você sente que sua maior dificuldade é: estratégia, constância, ou saber onde alocar melhor?"
+
+SE O LEAD PERGUNTA "COMO FUNCIONA?":
+  "O Plano Europa funciona como um acompanhamento.
+
+  Você terá: aulas gravadas; aulas ao vivo semanais; grupo de dúvidas; suporte para dúvidas sobre investimentos e carteiras; carteiras montadas na prática; atualização mensal dessas carteiras; e direcionamento para aprender a investir com mais clareza e segurança.
+
+  A ideia não é só entregar teoria, mas acompanhar o aluno no processo."
+
+SE O LEAD PEDE O VALOR (antes da proposta formal):
+  "Te explico sim. Antes, só pra eu conseguir te direcionar melhor: você está começando agora ou já possui algum valor investido hoje?"
+
+NA PROPOSTA (etapa: proposta):
+  Apresente o preço do Plano Europa com naturalidade. Pergunte se quer entrar.
+
+─── OBJEÇÕES ───
+
+"Tenho medo de perder dinheiro":
+  "Isso é mais comum do que você imagina.
+  Muita gente entra justamente por isso: porque sente falta de direção e acompanhamento para começar com mais segurança e clareza.
+  O objetivo do acompanhamento é justamente evitar que a pessoa caminhe sozinha e tome decisões sem entendimento."
+
+"Não sei nada sobre investimentos":
+  "Perfeito. Então você está exatamente no perfil de quem mais consegue aproveitar o acompanhamento.
+  Porque a proposta é justamente pegar pela mão quem ainda está perdido e mostrar um caminho mais claro e organizado dentro dos investimentos."
+
+"Vou pensar":
+  "Perfeito. É uma decisão que realmente precisa ser tomada com clareza.
+  Mas uma coisa é fato: quanto mais cedo a pessoa começa a aprender sobre dinheiro e investimentos, mais cedo ela começa a construir patrimônio e tomar decisões financeiras melhores.
+  Se tiver qualquer dúvida sobre como funciona o acompanhamento, pode me chamar."
+
+"Não tenho dinheiro agora":
+  "Entendo. E muitas pessoas que entram no acompanhamento começaram justamente querendo aprender primeiro para depois organizar melhor a própria vida financeira.
+  Porque às vezes o problema não é só dinheiro. É falta de direção financeira."
+
+─── REGRAS ───
+❌ NUNCA fornecer o link de compra — ele será enviado automaticamente após a confirmação
+❌ NUNCA inventar números, descontos ou promoções que não estejam no script
+❌ NÃO pressione o lead — nunca use frases como "E aí, decidiu?" ou "Vai entrar?"
+✅ Seja caloroso e natural — como o Edu humano faria
+✅ Máximo 5-6 linhas por mensagem
+✅ Use o nome do lead quando disponível
 
 Responda APENAS com o texto da mensagem. Sem JSON, sem explicações.`;
-
-  const mensagemParaClaude = eApresentacao
-    ? `Inicie a apresentação do produto (${sessao.produtoRecomendado}). Destaque 2-3 benefícios principais. Seja breve e direto. NÃO mencione preço.`
-    : mensagemLead;
 
   try {
     const completion = await anthropic.messages.create({
@@ -310,56 +156,52 @@ Responda APENAS com o texto da mensagem. Sem JSON, sem explicações.`;
       system: systemPrompt,
       messages: [
         ...historico.slice(-10),
-        { role: 'user', content: mensagemParaClaude },
+        { role: 'user', content: mensagemLead },
       ],
     });
 
     const resposta = completion.content[0].text.trim();
 
-    // Determina próxima etapa com base na resposta e contexto
+    // ── Avanço de etapa ────────────────────────────────────────────────────────
+
     let proximaEt = etapaAtual;
-    const msgLower = mensagemLead.toLowerCase();
 
-    // Lead aceita → avança
-    const aceitou = /\b1\b/.test(mensagemLead) ||
-      /(quero|sim|vamos|bora|fechar|garantir|comprar|aceito)/i.test(mensagemLead);
+    const temDuvida =
+      /(dúvida|duvida|não sei|caro|pensar|depois|medo|como funciona|quanto custa|valor|como pago)/i.test(mensagemLead);
+    const recusou =
+      /(não quero|nao quero|sem interesse|tchau|obrigad[ao])/i.test(mensagemLead);
 
-    // Lead tem dúvida → objeção
-    const temDuvida = /\b2\b/.test(mensagemLead) ||
-      /(dúvida|duvida|não sei|caro|pensar|depois)/i.test(mensagemLead);
-
-    // Lead recusa → encerrar
-    const recusou = /\b3\b/.test(mensagemLead) && etapaAtual.includes('proposta') ||
-      /(não quero|nao quero|sem interesse|tchau|obrigad)/i.test(mensagemLead);
-
-    if (eApresentacao) {
-      // Após apresentação: manter na etapa, aguardar reação do lead
-    } else if (etapaAtual === ETAPAS.APRESENTACAO_TRIBO || etapaAtual === ETAPAS.APRESENTACAO_ORG_FIN) {
-      proximaEt = etapaAtual === ETAPAS.APRESENTACAO_TRIBO ? ETAPAS.PROPOSTA_TRIBO : ETAPAS.PROPOSTA_ORG_FIN;
-    } else if (aceitou && (etapaAtual === ETAPAS.PROPOSTA_TRIBO || etapaAtual === ETAPAS.PROPOSTA_ORG_FIN)) {
-      proximaEt = etapaAtual === ETAPAS.PROPOSTA_TRIBO ? ETAPAS.FECHAMENTO_TRIBO : ETAPAS.FECHAMENTO_ORG_FIN;
-    } else if (temDuvida && (etapaAtual === ETAPAS.PROPOSTA_TRIBO || etapaAtual === ETAPAS.PROPOSTA_ORG_FIN)) {
-      proximaEt = etapaAtual === ETAPAS.PROPOSTA_TRIBO ? ETAPAS.OBJECAO_TRIBO : ETAPAS.OBJECAO_ORG_FIN;
-    } else if (aceitou && (etapaAtual === ETAPAS.OBJECAO_TRIBO || etapaAtual === ETAPAS.OBJECAO_ORG_FIN)) {
-      proximaEt = etapaAtual === ETAPAS.OBJECAO_TRIBO ? ETAPAS.FECHAMENTO_TRIBO : ETAPAS.FECHAMENTO_ORG_FIN;
-    } else if (etapaAtual === ETAPAS.FECHAMENTO_TRIBO || etapaAtual === ETAPAS.FECHAMENTO_ORG_FIN) {
-      proximaEt = ETAPAS.ENCERRADO;
+    if (etapaAtual === ETAPAS.BOAS_VINDAS) {
+      proximaEt = ETAPAS.APRESENTACAO;
+    } else if (etapaAtual === ETAPAS.APRESENTACAO) {
+      // Permite 2 trocas para Claude responder o bloqueio antes de ir para proposta
+      const trocas = (dadosLead.trocasApresentacao || 0) + 1;
+      dadosLead.trocasApresentacao = trocas;
+      if (trocas >= 2) {
+        proximaEt = ETAPAS.PROPOSTA;
+      }
+    } else if (etapaAtual === ETAPAS.PROPOSTA && temDuvida) {
+      proximaEt = ETAPAS.OBJECAO;
     }
 
-    const encerrada = recusou || proximaEt === ETAPAS.ENCERRADO;
+    const encerrada = recusou;
 
     const historicoAtualizado = [
       ...historico,
-      { role: 'user', content: mensagemParaClaude },
+      { role: 'user', content: mensagemLead },
       { role: 'assistant', content: resposta },
     ].slice(-20);
 
+    const { perfil, objetivoEmocional } = classificarPerfil(dadosLead, historicoAtualizado);
     const { temperatura } = classificarTemperatura(dadosLead, historicoAtualizado, sessao.pontuacaoTemperatura || 0);
 
     const sessaoAtualizada = {
       ...sessao,
       etapa: proximaEt,
       dadosLead,
+      produtoRecomendado: PRODUTOS.PLANO_EUROPA,
+      perfil: sessao.perfil || perfil,
+      objetivoEmocional: sessao.objetivoEmocional || objetivoEmocional,
       historico: historicoAtualizado,
       temperatura: resolverTemperatura(sessao.temperatura, temperatura),
       ultimaInteracao: new Date().toISOString(),

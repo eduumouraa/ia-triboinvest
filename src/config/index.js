@@ -33,24 +33,12 @@ module.exports = {
   },
 
   produtos: {
-    triboDoInvestidor: {
-      nome: 'Tribo do Investidor',
-      descricao: 'Comunidade ativa de investimentos liderada pelo Lucas',
-      preco: '12x R$ 97,00',
-      precoAnual: 'R$ 997,00/ano',
-      ancoragem: 'R$ 3,23 por dia — menos que um café',
-      garantia: '7 dias com devolução integral',
-      // Link real de compra — override via .env
-      link: process.env.LINK_TRIBO_DO_INVESTIDOR || 'https://triboinvest.com.br/tribo-do-investidor/',
-    },
-    organizacaoFinanceira: {
-      nome: 'Organização Financeira e Negociação de Dívidas',
-      descricao: 'Método completo para organizar finanças e sair das dívidas',
-      preco: 'R$ 97,00 (pagamento único)',
-      ancoragem: 'menos do que um boleto de cartão em atraso',
-      garantia: '7 dias com devolução integral',
-      // Link real de compra — override via .env
-      link: process.env.LINK_ORG_FINANCEIRA || 'https://chk.eduzz.com/8WPNOBJN0P',
+    planoEuropa: {
+      nome: 'Plano Europa',
+      descricao: 'Acompanhamento completo de investimentos da Tribo Invest',
+      preco: process.env.PRECO_PLANO_EUROPA || '[PREÇO — configure no .env]',
+      garantia: process.env.GARANTIA_PLANO_EUROPA || '7 dias com devolução integral',
+      link: process.env.LINK_PLANO_EUROPA || 'https://pay.hotmart.com/Y105795773S?off=0f638afj&bid=1780536748790',
     },
   },
 };
