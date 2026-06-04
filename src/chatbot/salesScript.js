@@ -41,17 +41,16 @@ function proximaEtapa(etapaAtual) {
 
 const MENSAGENS = {
 
-  [ETAPAS.BOAS_VINDAS]: () => {
-    const hora = new Date().getHours();
-    const saudacao = hora < 12 ? 'Bom dia!' : hora < 18 ? 'Boa tarde!' : 'Boa noite!';
-    return `${saudacao}
+  [ETAPAS.BOAS_VINDAS]: () =>
+`Olá. Seja bem-vindo à Tribo Invest!
 
-Aqui é Edu, do time da Tribo Invest.
+Me conta uma coisa:
 
-Vi que você interagiu no grupo sobre a Masterclass de hoje e queria entender melhor seu momento.
+1️⃣ Quero aprender a investir do zero
+2️⃣ Já invisto e quero mais consistência e direção
+3️⃣ Quero entender melhor como funciona o acompanhamento
 
-Hoje, você quer aprender a investir do zero ou já investe e sente falta de uma direção mais clara?`;
-  },
+_(Responda com 1, 2 ou 3)_`,
 
   [ETAPAS.FECHAMENTO]: () => {
     const link = process.env.LINK_PLANO_EUROPA || 'https://pay.hotmart.com/Y105795773S?off=0f638afj&bid=1780536748790';

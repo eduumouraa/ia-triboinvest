@@ -33,6 +33,26 @@ Preço: ${preco}
 Garantia: ${garantia}`;
 }
 
+// ─── PARSER DA ESCOLHA INICIAL ───────────────────────────────────────────────
+
+function parsearEscolhaInicial(msg) {
+  const n = extrairNumero(msg);
+  if (n === 1) return 'do_zero';
+  if (n === 2) return 'ja_investe';
+  if (n === 3) return 'como_funciona';
+  // Texto livre — tenta inferir
+  const m = msg.toLowerCase();
+  if (m.includes('zero') || m.includes('começ') || m.includes('nunca') || m.includes('inician')) return 'do_zero';
+  if (m.includes('já invisto') || m.includes('ja invisto') || m.includes('consistência') || m.includes('consisto') || m.includes('invisto')) return 'ja_investe';
+  if (m.includes('como funciona') || m.includes('entender') || m.includes('saber mais')) return 'como_funciona';
+  return null;
+}
+
+function extrairNumero(msg) {
+  const match = msg.trim().match(/^[^0-9]*([1-3])[^0-9]*$/);
+  return match ? parseInt(match[1]) : null;
+}
+
 // ─── PROCESSAMENTO PRINCIPAL ──────────────────────────────────────────────────
 
 async function processarMensagem(mensagemLead, sessao) {
@@ -44,6 +64,18 @@ async function processarMensagem(mensagemLead, sessao) {
     etapa: etapaAtual,
     msg: mensagemLead.substring(0, 40),
   });
+
+  // BOAS_VINDAS: parseia a opção escolhida (1/2/3) antes de ir ao Claude
+  if (etapaAtual === ETAPAS.BOAS_VINDAS) {
+    const escolha = parsearEscolhaInicial(mensagemLead);
+    if (!escolha) {
+      return {
+        resposta: 'Responda com *1*, *2* ou *3*. 😊',
+        sessaoAtualizada: sessao,
+      };
+    }
+    dadosLead.escolhaInicial = escolha;
+  }
 
   // Aceitação na PROPOSTA ou OBJECAO → fechamento fixo (salva chamada à API)
   const aceitouCompra =
@@ -85,19 +117,19 @@ ${contextoPlanoEuropa()}
 
 DADOS DO LEAD:
 - Nome: ${dadosLead.nome || 'não informado'}
-- Experiência identificada: ${dadosLead.experiencia || 'não identificada'}
+- Escolha inicial: ${dadosLead.escolhaInicial || 'não informada'}
 - Etapa atual: ${etapaAtual}
 
 ─── SCRIPT DE ATENDIMENTO ───
 
-QUANDO O LEAD RESPONDE "QUERO COMEÇAR DO ZERO" (ou variações):
+SE escolhaInicial = "do_zero" (escolheu opção 1):
   "Perfeito. Então o acompanhamento pode fazer muito sentido pra você.
 
   A proposta é justamente ajudar quem ainda não sabe por onde começar, com aulas gravadas, aulas ao vivo semanais, grupo de dúvidas, suporte para dúvidas sobre carteira e carteiras montadas na prática para o aluno entender melhor como funciona o mercado e como aplicar com mais clareza.
 
   Hoje, o que mais te trava: medo de errar, falta de conhecimento, ou falta de acompanhamento?"
 
-QUANDO O LEAD RESPONDE "JÁ INVISTO" (ou variações):
+SE escolhaInicial = "ja_investe" (escolheu opção 2):
   "Entendi. Nesse caso, o acompanhamento ajuda muito porque não fica só na teoria.
 
   A gente trabalha com aulas ao vivo, carteiras montadas na prática, atualização mensal dessas carteiras e suporte para tirar dúvidas relacionadas aos investimentos e às carteiras dos alunos.
@@ -106,7 +138,7 @@ QUANDO O LEAD RESPONDE "JÁ INVISTO" (ou variações):
 
   Hoje você sente que sua maior dificuldade é: estratégia, constância, ou saber onde alocar melhor?"
 
-SE O LEAD PERGUNTA "COMO FUNCIONA?":
+SE escolhaInicial = "como_funciona" (escolheu opção 3) OU SE O LEAD PERGUNTA "COMO FUNCIONA?":
   "O Plano Europa funciona como um acompanhamento.
 
   Você terá: aulas gravadas; aulas ao vivo semanais; grupo de dúvidas; suporte para dúvidas sobre investimentos e carteiras; carteiras montadas na prática; atualização mensal dessas carteiras; e direcionamento para aprender a investir com mais clareza e segurança.
