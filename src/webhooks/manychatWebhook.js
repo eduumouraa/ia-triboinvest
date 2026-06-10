@@ -1,6 +1,6 @@
 const express = require('express');
 const router = express.Router();
-const { processarLeadIncoming } = require('../handlers/leadHandler');
+const { iniciarConversaManyChat, processarMensagemManyChat } = require('../chatbot/manychatFlow');
 const logger = require('../config/logger');
 
 /**
@@ -49,22 +49,10 @@ router.post('/', express.json(), async (req, res) => {
   });
 
   try {
-    // Processa sem delay (ManyChat tem timeout de 10s)
-    // O delay de humanização é controlado via env — aqui forçamos skip
-    process.env._SKIP_HUMANIZATION = 'true';
-    const respostas = await processarLeadIncoming(platformId, message, canal);
-    process.env._SKIP_HUMANIZATION = 'false';
-
-    // Converte array de respostas para formato ManyChat
-    const messages = respostas.map((texto) => ({
-      type: 'text',
-      text: texto,
-    }));
-
+    const respostas = await processarMensagemManyChat(platformId, message, nome, canal);
+    const messages = respostas.map((texto) => ({ type: 'text', text: texto }));
     const primeiraMensagem = respostas[0] || '';
 
-    // ManyChat suporta até 10 mensagens por resposta
-    // Campo "text" no topo facilita o mapeamento via JSONPath simples
     return res.json({
       text: primeiraMensagem,
       version: 'v2',
@@ -96,9 +84,8 @@ router.post('/iniciar', express.json(), async (req, res) => {
   logger.info('Novo lead via ManyChat', { user_id, first_name, canal });
 
   try {
-    process.env._SKIP_HUMANIZATION = 'true';
-    const respostas = await processarLeadIncoming(platformId, 'oi', canal);
-    process.env._SKIP_HUMANIZATION = 'false';
+    const nome = [first_name, last_name].filter(Boolean).join(' ') || null;
+    const respostas = iniciarConversaManyChat(platformId, nome, canal);
 
     return res.json({
       version: 'v2',

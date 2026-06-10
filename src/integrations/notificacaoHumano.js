@@ -125,4 +125,46 @@ function montarResumoLead(dadosLead, produto, platformId, plataforma, leadId) {
 → Responda agora enquanto o lead está quente!`;
 }
 
-module.exports = { notificarLeadQuente };
+/**
+ * Notifica o especialista sobre um lead qualificado via ManyChat.
+ * @param {object} dados - { nome, perfil, objetivo, renda, whatsapp, platformId, canal }
+ */
+async function notificarLeadManyChat(dados) {
+  const { nome, perfil, objetivo, renda, whatsapp, platformId, canal } = dados;
+
+  const resumo =
+    `📋 *NOVO LEAD QUALIFICADO — MANYCHAT*\n\n` +
+    `👤 *Nome:* ${nome}\n` +
+    `📱 *WhatsApp:* ${whatsapp}\n` +
+    `🎯 *Perfil:* ${perfil || 'N/A'}\n` +
+    `💡 *Objetivo:* ${objetivo || 'N/A'}\n` +
+    `💰 *Guarda por mês:* ${renda || 'N/A'}\n\n` +
+    `📲 *Canal:* ${canal} | ID: ${platformId}\n\n` +
+    `→ Entre em contato pelo WhatsApp acima!`;
+
+  logger.info('Notificando especialista sobre lead ManyChat', { nome, whatsapp });
+
+  const erros = [];
+
+  if (process.env.EDUARDO_WHATSAPP && process.env.WHATSAPP_PHONE_NUMBER_ID) {
+    try {
+      await notificarViaWhatsApp(process.env.EDUARDO_WHATSAPP, resumo);
+    } catch (e) {
+      erros.push(`WhatsApp: ${e.message}`);
+    }
+  }
+
+  if (process.env.TELEGRAM_BOT_TOKEN && process.env.TELEGRAM_CHAT_ID) {
+    try {
+      await notificarViaTelegram(resumo);
+    } catch (e) {
+      erros.push(`Telegram: ${e.message}`);
+    }
+  }
+
+  if (erros.length > 0) {
+    logger.warn('Falhas parciais na notificação de lead ManyChat', { erros });
+  }
+}
+
+module.exports = { notificarLeadQuente, notificarLeadManyChat };
